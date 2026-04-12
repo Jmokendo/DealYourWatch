@@ -33,30 +33,46 @@ export default function Home() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+
     try {
       let imageUrl: string | undefined;
 
+      // Subir imagen si existe
       if (imageFile) {
         const form = new FormData();
         form.append('file', imageFile);
-        const uploadRes = await fetch('/api/upload', { method: 'POST', body: form });
+
+        const uploadRes = await fetch('/api/upload', {
+          method: 'POST',
+          body: form,
+        });
+
         if (!uploadRes.ok) {
           console.error('Error al subir imagen');
           return;
         }
+
         const { url } = await uploadRes.json();
         imageUrl = url;
       }
 
+      // Crear el listing
       const res = await fetch('/api/listings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title, price: parseFloat(price), userEmail, imageUrl }),
+        body: JSON.stringify({
+          title,
+          price: parseFloat(price),
+          userEmail,
+          imageUrl,
+        }),
       });
+
       if (!res.ok) {
         const err = await res.json();
         console.error('Error al crear listing:', err.error);
       } else {
+        // Resetear formulario
         setTitle('');
         setPrice('');
         setUserEmail('');
@@ -68,7 +84,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-10">
@@ -76,8 +92,12 @@ export default function Home() {
         <h1 className="text-4xl font-bold text-center mb-10">Listings Disponibles</h1>
 
         {/* Formulario */}
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-10 flex flex-col gap-4 max-w-md mx-auto">
+        <form
+          onSubmit={handleSubmit}
+          className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 mb-10 flex flex-col gap-4 max-w-md mx-auto"
+        >
           <h2 className="text-lg font-semibold">Crear nuevo listing</h2>
+
           <input
             type="text"
             placeholder="Título"
@@ -86,6 +106,7 @@ export default function Home() {
             required
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
           />
+
           <input
             type="number"
             placeholder="Precio (USD)"
@@ -96,6 +117,7 @@ export default function Home() {
             step="0.01"
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
           />
+
           <input
             type="email"
             placeholder="Tu email"
@@ -104,12 +126,14 @@ export default function Home() {
             required
             className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
           />
+
           <input
             type="file"
             accept="image/*"
             onChange={(e) => setImageFile(e.target.files?.[0] ?? null)}
             className="text-sm text-gray-600"
           />
+
           <button
             type="submit"
             disabled={loading}
@@ -119,11 +143,13 @@ export default function Home() {
           </button>
         </form>
 
-        {/* Lista */}
+        {/* Lista de listings */}
         {listings.length === 0 ? (
           <div className="text-center py-20">
             <p className="text-xl text-gray-500">Todavía no hay listings cargados.</p>
-            <p className="text-sm text-gray-400 mt-2">Usá el formulario de arriba para crear el primero.</p>
+            <p className="text-sm text-gray-400 mt-2">
+              Usá el formulario de arriba para crear el primero.
+            </p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -149,7 +175,9 @@ export default function Home() {
                   <h2 className="font-semibold text-lg line-clamp-2">{listing.title}</h2>
 
                   {listing.model?.brand && (
-                    <p className="text-sm text-gray-500 mt-1">{listing.model.brand.name}</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                      {listing.model.brand.name}
+                    </p>
                   )}
 
                   <p className="text-2xl font-bold text-green-600 mt-3">
@@ -166,4 +194,5 @@ export default function Home() {
         )}
       </div>
     </div>
-  }
+  );
+}
