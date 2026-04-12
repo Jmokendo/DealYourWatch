@@ -159,7 +159,7 @@ export default function Home() {
                 href={`/listings/${listing.id}`}
                 className="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100 hover:shadow-md transition-shadow"
               >
-                {listing.images && listing.images.length > 0 ? (
+                {(listing.images && listing.images.length > 0 ? (
                   <img
                     src={listing.images[0].url}
                     alt={listing.title}
@@ -169,7 +169,7 @@ export default function Home() {
                   <div className="w-full h-56 bg-gray-200 flex items-center justify-center">
                     <span className="text-gray-400">Sin imagen</span>
                   </div>
-                )}
+                ))}
 
                 <div className="p-5">
                   <h2 className="font-semibold text-lg line-clamp-2">{listing.title}</h2>
