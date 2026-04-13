@@ -19,7 +19,7 @@ function LoginInner() {
     if (status !== "unauthenticated") return;
     void signIn("google", { callbackUrl }).catch(() => {
       setError(
-        "No se pudo iniciar el inicio de sesión. Comprobá las variables de entorno de Google OAuth y AUTH_SECRET.",
+        "No se pudo iniciar el inicio de sesión. Comprobá las variables de entorno de Google OAuth y NEXTAUTH_SECRET (o AUTH_SECRET).",
       );
     });
   }, [callbackUrl, router, status]);
