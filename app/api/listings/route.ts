@@ -1,5 +1,6 @@
 import { isApiMockMode } from "@/lib/env";
 import { getPrisma } from "@/lib/prisma";
+import { requireAuthUser } from "@/lib/auth-session";
 import { jsonError, jsonOk } from "@/lib/api/http";
 import { mockListings } from "@/lib/api/mock-data";
 import { parseCreateListingBody } from "@/lib/api/validate";
@@ -36,6 +37,9 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
+  const authUser = await requireAuthUser();
+  if (!authUser) return jsonError("Unauthorized", 401);
+
   let raw: unknown;
   try {
     raw = await req.json();
@@ -79,10 +83,10 @@ export async function POST(req: Request) {
         brand: { id: "mock-brand-other", name: "Other", slug: "other" },
       },
       user: {
-        id: `mock-user-${b.userEmail}`,
-        email: b.userEmail,
-        name: b.userName ?? null,
-        image: null,
+        id: authUser.id,
+        email: authUser.email,
+        name: b.userName ?? authUser.name ?? null,
+        image: authUser.image,
       },
     };
     mockListings.unshift(created);
@@ -101,18 +105,16 @@ export async function POST(req: Request) {
     if (!exists) return jsonError("modelId not found", 400);
   }
 
-  const user = await db.user.upsert({
-    where: { email: b.userEmail },
-    create: {
-      email: b.userEmail,
-      name: b.userName ?? null,
-    },
-    update: { name: b.userName ?? undefined },
-  });
+  if (b.userName) {
+    await db.user.update({
+      where: { id: authUser.id },
+      data: { name: b.userName },
+    });
+  }
 
   const listing = await db.listing.create({
     data: {
-      userId: user.id,
+      userId: authUser.id,
       modelId,
       title: b.title,
       description: b.description,

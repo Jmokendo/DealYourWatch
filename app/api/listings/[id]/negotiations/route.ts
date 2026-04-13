@@ -1,5 +1,6 @@
 import { isApiMockMode } from "@/lib/env";
 import { getPrisma } from "@/lib/prisma";
+import { requireAuthUser } from "@/lib/auth-session";
 import { jsonError, jsonOk } from "@/lib/api/http";
 import type {
   CreateNegotiationBody,
@@ -10,6 +11,7 @@ import {
   mockNegotiationById,
   mockNegotiationsByListing,
 } from "@/lib/api/mock-data";
+import { isNegotiationParticipant } from "@/lib/api/negotiation-access";
 
 function toNegotiationSummary(
   n: {
@@ -41,24 +43,31 @@ export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  const authUser = await requireAuthUser();
+  if (!authUser) return jsonError("Unauthorized", 401);
+
   const { id } = await ctx.params;
 
   if (isApiMockMode()) {
-    if (!mockListings.some((l) => l.id === id)) {
-      return jsonError("Listing not found", 404);
-    }
-    const list = mockNegotiationsByListing[id] ?? [];
+    const listing = mockListings.find((l) => l.id === id);
+    if (!listing) return jsonError("Listing not found", 404);
+    const list = (mockNegotiationsByListing[id] ?? []).filter((n) =>
+      isNegotiationParticipant(authUser.id, n.buyerId, listing.user.id),
+    );
     return jsonOk(list.map((n) => ({ ...n })));
   }
 
   const db = getPrisma();
-  if (!db) return jsonOk([]);
+  if (!db) return jsonError("Database not configured", 503);
 
   const listing = await db.listing.findUnique({ where: { id } });
   if (!listing) return jsonError("Listing not found", 404);
 
   const rows = await db.negotiation.findMany({
-    where: { listingId: id },
+    where: {
+      listingId: id,
+      OR: [{ buyerId: authUser.id }, { listing: { userId: authUser.id } }],
+    },
     orderBy: { createdAt: "desc" },
     include: { thread: true },
   });
@@ -71,6 +80,9 @@ export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  const authUser = await requireAuthUser();
+  if (!authUser) return jsonError("Unauthorized", 401);
+
   const { id } = await ctx.params;
   let raw: unknown;
   try {
@@ -79,19 +91,20 @@ export async function POST(
     return jsonError("Invalid JSON body", 400);
   }
   const o = raw as Record<string, unknown>;
-  const buyerEmail =
-    typeof o.buyerEmail === "string" ? o.buyerEmail.trim() : "";
-  if (!buyerEmail) return jsonError("buyerEmail is required", 400);
   const body: CreateNegotiationBody = {
-    buyerEmail,
     buyerName: typeof o.buyerName === "string" ? o.buyerName : undefined,
     expiresInDays:
       typeof o.expiresInDays === "number" ? o.expiresInDays : undefined,
   };
 
   if (isApiMockMode()) {
-    if (!mockListings.some((l) => l.id === id)) {
-      return jsonError("Listing not found", 404);
+    const foundListing = mockListings.find((l) => l.id === id);
+    if (!foundListing) return jsonError("Listing not found", 404);
+    if (foundListing.status === "SOLD") {
+      return jsonError("Listing is sold", 409);
+    }
+    if (foundListing.user.id === authUser.id) {
+      return jsonError("Cannot negotiate your own listing", 403);
     }
     const days = body.expiresInDays ?? 7;
     const expiresAt = new Date(Date.now() + days * 864e5).toISOString();
@@ -100,7 +113,7 @@ export async function POST(
     const neg: NegotiationSummary = {
       id: negId,
       listingId: id,
-      buyerId: `mock-buyer-${buyerEmail}`,
+      buyerId: authUser.id,
       threadId: `mock-thread-${negId}`,
       status: "ACTIVE",
       round: 1,
@@ -119,12 +132,19 @@ export async function POST(
 
   const listing = await db.listing.findUnique({ where: { id } });
   if (!listing) return jsonError("Listing not found", 404);
+  if (listing.status === "SOLD") {
+    return jsonError("Listing is sold", 409);
+  }
+  if (listing.userId === authUser.id) {
+    return jsonError("Cannot negotiate your own listing", 403);
+  }
 
-  const buyer = await db.user.upsert({
-    where: { email: buyerEmail },
-    create: { email: buyerEmail, name: body.buyerName ?? null },
-    update: { name: body.buyerName ?? undefined },
-  });
+  if (body.buyerName) {
+    await db.user.update({
+      where: { id: authUser.id },
+      data: { name: body.buyerName },
+    });
+  }
 
   const days = body.expiresInDays ?? 7;
   const expiresAt = new Date(Date.now() + days * 864e5);
@@ -132,7 +152,7 @@ export async function POST(
   const neg = await db.negotiation.create({
     data: {
       listingId: id,
-      buyerId: buyer.id,
+      buyerId: authUser.id,
       expiresAt,
     },
   });
@@ -140,7 +160,7 @@ export async function POST(
   await db.thread.create({
     data: {
       negotiationId: neg.id,
-      buyerId: buyer.id,
+      buyerId: authUser.id,
     },
   });
 

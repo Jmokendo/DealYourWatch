@@ -16,7 +16,9 @@
  * GET    /api/listings/[id]/negotiations
  * POST   /api/listings/[id]/negotiations
  * GET    /api/negotiations/[id]
+ * GET    /api/negotiations/[id]/offers
  * POST   /api/negotiations/[id]/offers
+ * PATCH  /api/negotiations/[id]/offers/[offerId]
  * GET    /api/threads/[id]/messages
  * POST   /api/threads/[id]/messages
  * GET    /api/brands
@@ -30,7 +32,7 @@
  * - Listing detail: gallery, price, condition, box/papers, seller, CTA “Make offer”.
  * - Offer thread: messages + offer rounds (negotiation).
  * - Seller dashboard: my listings, negotiation status (later).
- * - Auth: MVP uses email on form; replace with real auth without changing listing DTO shape.
+ * - Auth: NextAuth (Google) + session; mutations use session user (no email fields in POST bodies).
  *
  * QA / failure points (test early)
  * --------------------------------
@@ -128,7 +130,6 @@ export interface CreateListingBody {
   title: string;
   /** Parsed number on wire; stored as Decimal */
   price: number;
-  userEmail: string;
   userName?: string;
   imageUrl?: string;
   description?: string;
@@ -168,7 +169,6 @@ export interface NegotiationSummary {
 }
 
 export interface CreateNegotiationBody {
-  buyerEmail: string;
   buyerName?: string;
   /** Defaults to server policy (e.g. 7 days). */
   expiresInDays?: number;
@@ -187,10 +187,18 @@ export interface OfferDto {
 }
 
 export interface CreateOfferBody {
-  userEmail: string;
   amount: number;
-  reasonType: string;
+  /** Defaults to OFFER (first bid from buyer). */
+  reasonType?: string;
   reasonNote?: string;
+  currency?: string;
+}
+
+export interface PatchOfferBody {
+  action: "accept" | "reject" | "counter";
+  /** Required when action is counter */
+  amount?: number;
+  note?: string;
   currency?: string;
 }
 
@@ -204,9 +212,9 @@ export interface MessageDto {
 }
 
 export interface CreateMessageBody {
-  senderEmail?: string;
   content: string;
-  isSystem?: boolean;
+  /** Parsed from optional wire field; default false. */
+  isSystem: boolean;
 }
 
 export interface HealthDto {

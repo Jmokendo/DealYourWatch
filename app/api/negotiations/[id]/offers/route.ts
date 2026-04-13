@@ -1,11 +1,18 @@
 import { isApiMockMode } from "@/lib/env";
 import { getPrisma } from "@/lib/prisma";
+import { requireAuthUser } from "@/lib/auth-session";
 import { jsonError, jsonOk } from "@/lib/api/http";
 import type { CreateOfferBody, OfferDto } from "@/lib/api/contracts";
 import {
+  mockListings,
   mockNegotiationById,
   mockOffersByNegotiation,
 } from "@/lib/api/mock-data";
+import {
+  isNegotiationParticipant,
+  loadNegotiationWithSeller,
+  mockListingSellerId,
+} from "@/lib/api/negotiation-access";
 
 function toOfferDto(o: {
   id: string;
@@ -35,18 +42,31 @@ export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  const authUser = await requireAuthUser();
+  if (!authUser) return jsonError("Unauthorized", 401);
+
   const { id } = await ctx.params;
 
   if (isApiMockMode()) {
-    if (!mockNegotiationById[id]) return jsonError("Negotiation not found", 404);
+    const neg = mockNegotiationById[id];
+    if (!neg) return jsonError("Negotiation not found", 404);
+    const sellerId = mockListingSellerId(neg.listingId);
+    if (!sellerId) return jsonError("Listing not found", 404);
+    if (!isNegotiationParticipant(authUser.id, neg.buyerId, sellerId)) {
+      return jsonError("Forbidden", 403);
+    }
     return jsonOk([...(mockOffersByNegotiation[id] ?? [])]);
   }
 
   const db = getPrisma();
-  if (!db) return jsonOk([]);
+  if (!db) return jsonError("Database not configured", 503);
 
-  const neg = await db.negotiation.findUnique({ where: { id } });
+  const neg = await loadNegotiationWithSeller(db, id);
   if (!neg) return jsonError("Negotiation not found", 404);
+  const sellerId = neg.listing.userId;
+  if (!isNegotiationParticipant(authUser.id, neg.buyerId, sellerId)) {
+    return jsonError("Forbidden", 403);
+  }
 
   const rows = await db.offer.findMany({
     where: { negotiationId: id },
@@ -59,6 +79,9 @@ export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  const authUser = await requireAuthUser();
+  if (!authUser) return jsonError("Unauthorized", 401);
+
   const { id } = await ctx.params;
   let raw: unknown;
   try {
@@ -67,37 +90,59 @@ export async function POST(
     return jsonError("Invalid JSON body", 400);
   }
   const o = raw as Record<string, unknown>;
-  const userEmail =
-    typeof o.userEmail === "string" ? o.userEmail.trim() : "";
-  const reasonType =
+  const reasonTypeRaw =
     typeof o.reasonType === "string" ? o.reasonType.trim() : "";
+  const reasonType = reasonTypeRaw || "OFFER";
   const amount =
     typeof o.amount === "number" ? o.amount : Number.parseFloat(String(o.amount));
 
-  if (!userEmail) return jsonError("userEmail is required", 400);
-  if (!reasonType) return jsonError("reasonType is required", 400);
   if (!Number.isFinite(amount) || amount <= 0) {
     return jsonError("amount must be a positive number", 400);
   }
 
   const body: CreateOfferBody = {
-    userEmail,
     amount,
     reasonType,
     reasonNote: typeof o.reasonNote === "string" ? o.reasonNote : undefined,
     currency: typeof o.currency === "string" ? o.currency : undefined,
   };
+  const resolvedReasonType = body.reasonType ?? "OFFER";
 
   if (isApiMockMode()) {
-    if (!mockNegotiationById[id]) return jsonError("Negotiation not found", 404);
+    const neg = mockNegotiationById[id];
+    if (!neg) return jsonError("Negotiation not found", 404);
+    const sellerId = mockListingSellerId(neg.listingId);
+    if (!sellerId) return jsonError("Listing not found", 404);
+    if (!isNegotiationParticipant(authUser.id, neg.buyerId, sellerId)) {
+      return jsonError("Forbidden", 403);
+    }
+    if (neg.status !== "ACTIVE") {
+      return jsonError("Negotiation is not active", 409);
+    }
+    // Best-effort mock-mode guard: prevent offers on SOLD listings.
+    const listing = mockListings.find((l) => l.id === neg.listingId);
+    if (listing?.status === "SOLD") {
+      return jsonError("Listing is sold", 409);
+    }
+    const existing = mockOffersByNegotiation[id] ?? [];
+    if (existing.length > 0) {
+      return jsonError(
+        "Resolve the pending offer first (accept, reject, or counter)",
+        409,
+      );
+    }
+    if (authUser.id !== neg.buyerId) {
+      return jsonError("Only the buyer can place the opening offer", 403);
+    }
+
     const now = new Date().toISOString();
     const offer: OfferDto = {
       id: `mock-offer-${Date.now()}`,
       negotiationId: id,
-      userId: `mock-user-${userEmail}`,
+      userId: authUser.id,
       amount: amount.toFixed(2),
       currency: body.currency ?? "USD",
-      reasonType: body.reasonType,
+      reasonType: resolvedReasonType,
       reasonNote: body.reasonNote ?? null,
       status: "PENDING",
       createdAt: now,
@@ -110,22 +155,37 @@ export async function POST(
   const db = getPrisma();
   if (!db) return jsonError("Database not configured", 503);
 
-  const neg = await db.negotiation.findUnique({ where: { id } });
+  const neg = await loadNegotiationWithSeller(db, id);
   if (!neg) return jsonError("Negotiation not found", 404);
+  if (neg.listing.status === "SOLD") {
+    return jsonError("Listing is sold", 409);
+  }
+  const sellerId = neg.listing.userId;
+  if (!isNegotiationParticipant(authUser.id, neg.buyerId, sellerId)) {
+    return jsonError("Forbidden", 403);
+  }
+  if (neg.status !== "ACTIVE") {
+    return jsonError("Negotiation is not active", 409);
+  }
 
-  const user = await db.user.upsert({
-    where: { email: userEmail },
-    create: { email: userEmail },
-    update: {},
-  });
+  const offerCount = await db.offer.count({ where: { negotiationId: id } });
+  if (offerCount > 0) {
+    return jsonError(
+      "Resolve the pending offer first (accept, reject, or counter)",
+      409,
+    );
+  }
+  if (authUser.id !== neg.buyerId) {
+    return jsonError("Only the buyer can place the opening offer", 403);
+  }
 
   const row = await db.offer.create({
     data: {
       negotiationId: id,
-      userId: user.id,
+      userId: authUser.id,
       amount: body.amount,
       currency: body.currency ?? "USD",
-      reasonType: body.reasonType,
+      reasonType: resolvedReasonType,
       reasonNote: body.reasonNote,
     },
   });

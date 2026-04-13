@@ -1,5 +1,6 @@
 import { isApiMockMode } from "@/lib/env";
 import { getPrisma } from "@/lib/prisma";
+import { requireAuthUser } from "@/lib/auth-session";
 import { jsonError, jsonOk } from "@/lib/api/http";
 import type { CreateMessageBody, MessageDto } from "@/lib/api/contracts";
 import { mockMessagesByThread } from "@/lib/api/mock-data";
@@ -60,11 +61,14 @@ export async function POST(
   const content = typeof o.content === "string" ? o.content.trim() : "";
   if (!content) return jsonError("content is required", 400);
 
+  const isSystem: boolean =
+    typeof o.isSystem === "boolean" ? o.isSystem : false;
+  const authUser = isSystem ? null : await requireAuthUser();
+  if (!isSystem && !authUser) return jsonError("Unauthorized", 401);
+
   const body: CreateMessageBody = {
-    senderEmail:
-      typeof o.senderEmail === "string" ? o.senderEmail.trim() : undefined,
     content,
-    isSystem: typeof o.isSystem === "boolean" ? o.isSystem : undefined,
+    isSystem,
   };
 
   if (isApiMockMode()) {
@@ -72,11 +76,9 @@ export async function POST(
     const msg: MessageDto = {
       id: `mock-msg-${Date.now()}`,
       threadId: id,
-      senderId: body.senderEmail
-        ? `mock-${body.senderEmail}`
-        : null,
+      senderId: body.isSystem ? null : authUser!.id,
       content: body.content,
-      isSystem: body.isSystem ?? false,
+      isSystem: body.isSystem,
       createdAt: now,
     };
     if (!mockMessagesByThread[id]) mockMessagesByThread[id] = [];
@@ -90,22 +92,14 @@ export async function POST(
   const thread = await db.thread.findUnique({ where: { id } });
   if (!thread) return jsonError("Thread not found", 404);
 
-  let senderId: string | null = null;
-  if (body.senderEmail) {
-    const u = await db.user.upsert({
-      where: { email: body.senderEmail },
-      create: { email: body.senderEmail },
-      update: {},
-    });
-    senderId = u.id;
-  }
+  const senderId = body.isSystem ? null : authUser!.id;
 
   const row = await db.message.create({
     data: {
       threadId: id,
       senderId,
       content: body.content,
-      isSystem: body.isSystem ?? false,
+      isSystem: body.isSystem,
     },
   });
 

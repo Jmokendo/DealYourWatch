@@ -3,6 +3,7 @@
 import type { ComponentType, SVGProps } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { signIn, signOut, useSession } from "next-auth/react";
 import { motion, type Variants } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -41,7 +42,7 @@ const stagger: Variants = {
 };
 
 function Nav() {
-  const router = useRouter();
+  const { data: session, status } = useSession();
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-zinc-200 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/50">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -70,14 +71,32 @@ function Nav() {
           </a>
         </nav>
         <div className="flex items-center gap-3">
-          <Button
-            type="button"
-            variant="ghost"
-            className="hidden sm:inline-flex"
-            onClick={() => router.push("/login")}
-          >
-            Iniciar sesión
-          </Button>
+          {status === "loading" ? (
+            <span className="hidden text-sm text-zinc-500 sm:inline">…</span>
+          ) : session?.user ? (
+            <>
+              <span className="hidden max-w-[10rem] truncate text-sm text-zinc-600 sm:inline">
+                {session.user.name ?? session.user.email}
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                className="hidden sm:inline-flex"
+                onClick={() => void signOut({ callbackUrl: "/" })}
+              >
+                Salir
+              </Button>
+            </>
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              className="hidden sm:inline-flex"
+              onClick={() => void signIn("google", { callbackUrl: "/sell" })}
+            >
+              Iniciar sesión
+            </Button>
+          )}
           <Button
             type="button"
             className="rounded-2xl"

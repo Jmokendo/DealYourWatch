@@ -16,12 +16,10 @@ export function parseCreateListingBody(
   }
   const o = raw as Record<string, unknown>;
   const title = typeof o.title === "string" ? o.title.trim() : "";
-  const userEmail = typeof o.userEmail === "string" ? o.userEmail.trim() : "";
   const price =
     typeof o.price === "number" ? o.price : Number.parseFloat(String(o.price));
 
   if (!title) return { ok: false, error: "title is required" };
-  if (!userEmail) return { ok: false, error: "userEmail is required" };
   if (!Number.isFinite(price) || price <= 0) {
     return { ok: false, error: "price must be a positive number" };
   }
@@ -39,7 +37,6 @@ export function parseCreateListingBody(
     body: {
       title,
       price,
-      userEmail,
       userName: typeof o.userName === "string" ? o.userName : undefined,
       imageUrl: typeof o.imageUrl === "string" ? o.imageUrl : undefined,
       description: typeof o.description === "string" ? o.description : undefined,
