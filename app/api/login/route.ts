@@ -30,7 +30,8 @@ export async function POST(req: Request) {
 
   const token = signToken(user.id);
 
-  cookies().set("auth_token", token, {
+  const cookieStore = await cookies();
+  cookieStore.set("auth_token", token, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
