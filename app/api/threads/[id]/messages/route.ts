@@ -63,7 +63,7 @@ export async function POST(
 
   const isSystem: boolean =
     typeof o.isSystem === "boolean" ? o.isSystem : false;
-  const userId = isSystem ? null : getUserIdFromCookie() || "dev-user-1";
+  const userId = isSystem ? null : (await getUserIdFromCookie()) || "dev-user-1";
 
   const body: CreateMessageBody = {
     content,

@@ -57,7 +57,7 @@ export async function POST(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const userId = getUserIdFromCookie() || "dev-user-1";
+  const userId = (await getUserIdFromCookie()) || "dev-user-1";
 
   const { id } = await ctx.params;
 

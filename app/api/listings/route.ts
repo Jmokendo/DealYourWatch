@@ -37,7 +37,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const userId = getUserIdFromCookie() || "dev-user-1";
+  const userId = (await getUserIdFromCookie()) || "dev-user-1";
 
   let raw: unknown;
   try {

@@ -62,7 +62,7 @@ export async function GET(
   });
 
   return jsonOk(
-    rows.map((m) => ({
+    rows.map((m: any) => ({
       id: m.id,
       name: m.name,
       slug: m.slug,

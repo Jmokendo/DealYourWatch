@@ -58,7 +58,7 @@ export async function PATCH(
   req: Request,
   ctx: { params: Promise<{ id: string; offerId: string }> },
 ) {
-  const userId = getUserIdFromCookie() || "dev-user-1";
+  const userId = (await getUserIdFromCookie()) || "dev-user-1";
 
   const { id: negotiationId, offerId } = await ctx.params;
 
