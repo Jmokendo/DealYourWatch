@@ -1,11 +1,11 @@
 import { isApiMockMode } from "@/lib/env";
 import { getPrisma } from "@/lib/prisma";
-import { requireAuthUser } from "@/lib/auth-session";
 import { jsonError, jsonOk } from "@/lib/api/http";
 import type {
   CreateNegotiationBody,
   NegotiationSummary,
 } from "@/lib/api/contracts";
+import { getUserIdFromCookie } from "@/lib/getUser";
 import {
   mockListings,
   mockNegotiationById,
@@ -43,8 +43,7 @@ export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const authUser = await requireAuthUser();
-  if (!authUser) return jsonError("Unauthorized", 401);
+  const userId = getUserIdFromCookie() || "dev-user-1";
 
   const { id } = await ctx.params;
 
@@ -52,7 +51,7 @@ export async function GET(
     const listing = mockListings.find((l) => l.id === id);
     if (!listing) return jsonError("Listing not found", 404);
     const list = (mockNegotiationsByListing[id] ?? []).filter((n) =>
-      isNegotiationParticipant(authUser.id, n.buyerId, listing.user.id),
+      isNegotiationParticipant(userId, n.buyerId, listing.user.id),
     );
     return jsonOk(list.map((n) => ({ ...n })));
   }
@@ -66,7 +65,7 @@ export async function GET(
   const rows = await db.negotiation.findMany({
     where: {
       listingId: id,
-      OR: [{ buyerId: authUser.id }, { listing: { userId: authUser.id } }],
+      OR: [{ buyerId: userId }, { listing: { userId: userId } }],
     },
     orderBy: { createdAt: "desc" },
     include: { thread: true },
@@ -80,8 +79,7 @@ export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const authUser = await requireAuthUser();
-  if (!authUser) return jsonError("Unauthorized", 401);
+  const userId = getUserIdFromCookie() || "dev-user-1";
 
   const { id } = await ctx.params;
   let raw: unknown;
@@ -103,7 +101,7 @@ export async function POST(
     if (foundListing.status === "SOLD") {
       return jsonError("Listing is sold", 409);
     }
-    if (foundListing.user.id === authUser.id) {
+    if (foundListing.user.id === userId) {
       return jsonError("Cannot negotiate your own listing", 403);
     }
     const days = body.expiresInDays ?? 7;
@@ -113,7 +111,7 @@ export async function POST(
     const neg: NegotiationSummary = {
       id: negId,
       listingId: id,
-      buyerId: authUser.id,
+      buyerId: userId,
       threadId: `mock-thread-${negId}`,
       status: "ACTIVE",
       round: 1,
@@ -135,13 +133,13 @@ export async function POST(
   if (listing.status === "SOLD") {
     return jsonError("Listing is sold", 409);
   }
-  if (listing.userId === authUser.id) {
+  if (listing.userId === userId) {
     return jsonError("Cannot negotiate your own listing", 403);
   }
 
   if (body.buyerName) {
     await db.user.update({
-      where: { id: authUser.id },
+      where: { id: userId },
       data: { name: body.buyerName },
     });
   }
@@ -152,7 +150,7 @@ export async function POST(
   const neg = await db.negotiation.create({
     data: {
       listingId: id,
-      buyerId: authUser.id,
+      buyerId: userId,
       expiresAt,
     },
   });
@@ -160,7 +158,7 @@ export async function POST(
   await db.thread.create({
     data: {
       negotiationId: neg.id,
-      buyerId: authUser.id,
+      buyerId: userId,
     },
   });
 

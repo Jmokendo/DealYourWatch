@@ -1,9 +1,9 @@
 import { isApiMockMode } from "@/lib/env";
 import { getPrisma } from "@/lib/prisma";
-import { requireAuthUser } from "@/lib/auth-session";
 import { jsonError, jsonOk } from "@/lib/api/http";
 import type { CreateMessageBody, MessageDto } from "@/lib/api/contracts";
 import { mockMessagesByThread } from "@/lib/api/mock-data";
+import { getUserIdFromCookie } from "@/lib/getUser";
 
 function toMessageDto(m: {
   id: string;
@@ -63,8 +63,7 @@ export async function POST(
 
   const isSystem: boolean =
     typeof o.isSystem === "boolean" ? o.isSystem : false;
-  const authUser = isSystem ? null : await requireAuthUser();
-  if (!isSystem && !authUser) return jsonError("Unauthorized", 401);
+  const userId = isSystem ? null : getUserIdFromCookie() || "dev-user-1";
 
   const body: CreateMessageBody = {
     content,
@@ -76,7 +75,7 @@ export async function POST(
     const msg: MessageDto = {
       id: `mock-msg-${Date.now()}`,
       threadId: id,
-      senderId: body.isSystem ? null : authUser!.id,
+      senderId: body.isSystem ? null : userId,
       content: body.content,
       isSystem: body.isSystem,
       createdAt: now,
@@ -92,7 +91,7 @@ export async function POST(
   const thread = await db.thread.findUnique({ where: { id } });
   if (!thread) return jsonError("Thread not found", 404);
 
-  const senderId = body.isSystem ? null : authUser!.id;
+  const senderId = body.isSystem ? null : userId;
 
   const row = await db.message.create({
     data: {

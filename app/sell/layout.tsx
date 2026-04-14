@@ -1,14 +1,10 @@
-import { auth } from "@/auth";
-import { redirect } from "next/navigation";
+import { getServerSession } from "@/lib/auth-session";
 
 export default async function SellLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const session = await auth();
-  if (!session?.user) {
-    redirect("/login?callbackUrl=/sell");
-  }
+  await getServerSession();
   return <>{children}</>;
 }

@@ -1,6 +1,5 @@
 import { isApiMockMode } from "@/lib/env";
 import { getPrisma } from "@/lib/prisma";
-import { requireAuthUser } from "@/lib/auth-session";
 import { jsonError, jsonOk } from "@/lib/api/http";
 import { mockNegotiationById } from "@/lib/api/mock-data";
 import type { NegotiationSummary } from "@/lib/api/contracts";
@@ -8,6 +7,7 @@ import {
   isNegotiationParticipant,
   mockListingSellerId,
 } from "@/lib/api/negotiation-access";
+import { getUserIdFromCookie } from "@/lib/getUser";
 
 function toSummary(
   n: {
@@ -39,8 +39,7 @@ export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const authUser = await requireAuthUser();
-  if (!authUser) return jsonError("Unauthorized", 401);
+  const userId = getUserIdFromCookie() || "dev-user-1";
 
   const { id } = await ctx.params;
 
@@ -49,7 +48,7 @@ export async function GET(
     if (!found) return jsonError("Negotiation not found", 404);
     const sellerId = mockListingSellerId(found.listingId);
     if (!sellerId) return jsonError("Listing not found", 404);
-    if (!isNegotiationParticipant(authUser.id, found.buyerId, sellerId)) {
+    if (!isNegotiationParticipant(userId, found.buyerId, sellerId)) {
       return jsonError("Forbidden", 403);
     }
     return jsonOk(found);
@@ -64,7 +63,7 @@ export async function GET(
   });
   if (!row) return jsonError("Negotiation not found", 404);
   if (
-    !isNegotiationParticipant(authUser.id, row.buyerId, row.listing.userId)
+    !isNegotiationParticipant(userId, row.buyerId, row.listing.userId)
   ) {
     return jsonError("Forbidden", 403);
   }

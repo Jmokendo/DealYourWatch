@@ -11,7 +11,11 @@ export function SessionProvider({
   session: Session | null;
 }) {
   return (
-    <NextAuthSessionProvider session={session ?? undefined}>
+    <NextAuthSessionProvider
+      session={session ?? undefined}
+      refetchInterval={0}
+      refetchOnWindowFocus={process.env.NODE_ENV === "production"}
+    >
       {children}
     </NextAuthSessionProvider>
   );

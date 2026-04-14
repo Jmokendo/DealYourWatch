@@ -1,12 +1,12 @@
 import { isApiMockMode } from "@/lib/env";
 import { getPrisma } from "@/lib/prisma";
-import { requireAuthUser } from "@/lib/auth-session";
 import { jsonError, jsonOk } from "@/lib/api/http";
 import { mockListings } from "@/lib/api/mock-data";
 import { parseCreateListingBody } from "@/lib/api/validate";
 import { ensureFallbackWatchModelId } from "@/lib/api/catalog";
 import { toListingSummary } from "@/lib/api/serialize-listing";
 import type { ListingStatus, ListingSummary } from "@/lib/api/contracts";
+import { getUserIdFromCookie } from "@/lib/getUser";
 
 const listInclude = {
   images: { orderBy: { order: "asc" as const } },
@@ -37,8 +37,7 @@ export async function GET(req: Request) {
 }
 
 export async function POST(req: Request) {
-  const authUser = await requireAuthUser();
-  if (!authUser) return jsonError("Unauthorized", 401);
+  const userId = getUserIdFromCookie() || "dev-user-1";
 
   let raw: unknown;
   try {
@@ -83,10 +82,10 @@ export async function POST(req: Request) {
         brand: { id: "mock-brand-other", name: "Other", slug: "other" },
       },
       user: {
-        id: authUser.id,
-        email: authUser.email,
-        name: b.userName ?? authUser.name ?? null,
-        image: authUser.image,
+        id: userId,
+        email: "dev@test.com",
+        name: b.userName ?? "Dev User",
+        image: null,
       },
     };
     mockListings.unshift(created);
@@ -107,14 +106,14 @@ export async function POST(req: Request) {
 
   if (b.userName) {
     await db.user.update({
-      where: { id: authUser.id },
+      where: { id: userId },
       data: { name: b.userName },
     });
   }
 
   const listing = await db.listing.create({
     data: {
-      userId: authUser.id,
+      userId,
       modelId,
       title: b.title,
       description: b.description,

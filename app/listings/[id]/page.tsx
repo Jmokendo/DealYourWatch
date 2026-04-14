@@ -3,12 +3,13 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ListingDetail, NegotiationSummary } from "@/lib/api/contracts";
+import { DEV_USER } from "@/lib/devUser";
 import {
   formatMoney,
   getConditionLabel,
@@ -58,7 +59,7 @@ export default function ListingDetailPage() {
   }, [load]);
 
   useEffect(() => {
-    if (!id || !session?.user) {
+    if (!id) {
       setExistingNegotiation(null);
       return;
     }
@@ -84,15 +85,16 @@ export default function ListingDetailPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, session?.user]);
+  }, [id]);
 
+  const currentUserId = session?.user?.id ?? DEV_USER.id;
   const isOwner =
-    session?.user?.id && listing?.user.id
-      ? session.user.id === listing.user.id
+    currentUserId && listing?.user.id
+      ? currentUserId === listing.user.id
       : false;
 
   async function startNegotiation() {
-    if (!id || !session?.user?.id) return;
+    if (!id) return;
     setBusy(true);
     setError(null);
     setInfo(null);
@@ -102,10 +104,6 @@ export default function ListingDetailPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({}),
       });
-      if (res.status === 401) {
-        setError("Sign in is required before you can make an offer.");
-        return;
-      }
       if (!res.ok) {
         const j = (await res.json().catch(() => null)) as { error?: string } | null;
         setError(j?.error ?? "We couldn't start a negotiation for this listing.");
@@ -240,19 +238,6 @@ export default function ListingDetailPage() {
                   </div>
                 ) : status === "loading" ? (
                   <p className="text-sm text-neutral-500">Checking your account…</p>
-                ) : !session?.user ? (
-                  <div className="space-y-3">
-                    <p className="text-sm text-neutral-600">Sign in to make an offer on this listing.</p>
-                    <Button
-                      type="button"
-                      className="w-full"
-                      onClick={() =>
-                        void signIn("google", { callbackUrl: `/listings/${id}` })
-                      }
-                    >
-                      Sign in to continue
-                    </Button>
-                  </div>
                 ) : isOwner ? (
                   <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
                     You own this listing, so the buyer action is hidden here.

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { signIn, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import type {
@@ -13,6 +13,7 @@ import type {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { DEV_USER } from "@/lib/devUser";
 import {
   formatMoney,
   getNegotiationStatusLabel,
@@ -52,13 +53,6 @@ export default function NegotiationPage() {
         fetch(`/api/negotiations/${id}`),
         fetch(`/api/negotiations/${id}/offers`),
       ]);
-      if (nRes.status === 401 || oRes.status === 401) {
-        setError("Sign in is required to view this negotiation.");
-        setNegotiation(null);
-        setOffers([]);
-        setListing(null);
-        return;
-      }
       if (nRes.status === 403 || oRes.status === 403) {
         setError("You do not have access to this negotiation.");
         setNegotiation(null);
@@ -100,7 +94,7 @@ export default function NegotiationPage() {
     void loadAll();
   }, [loadAll]);
 
-  const userId = session?.user?.id;
+  const userId = session?.user?.id ?? DEV_USER.id;
   const sellerId = listing?.user.id;
 
   const role = useMemo(() => {
@@ -238,26 +232,14 @@ export default function NegotiationPage() {
         </p>
       ) : null}
 
-      {status === "loading" || loading ? (
+      {loading ? (
         <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="h-96 animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100" />
           <div className="h-64 animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100" />
         </div>
       ) : null}
 
-      {status !== "loading" && !session?.user ? (
-        <div className="flex flex-col gap-2">
-          <p className="text-sm text-neutral-600">Sign in to view this negotiation.</p>
-          <Button
-            type="button"
-            onClick={() => void signIn("google", { callbackUrl: `/negotiations/${id}` })}
-          >
-            Sign in
-          </Button>
-        </div>
-      ) : null}
-
-      {negotiation && listing && session?.user ? (
+      {negotiation && listing ? (
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-6">
             <div className="space-y-3">
