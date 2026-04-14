@@ -3,7 +3,6 @@
 import type { ComponentType, SVGProps } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { signOut, useSession } from "next-auth/react";
 import { motion, type Variants } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -43,8 +42,7 @@ const stagger: Variants = {
 };
 
 function Nav() {
-  const { data: session, status } = useSession();
-  const currentUser = session?.user ?? DEV_USER;
+  const currentUser = DEV_USER;
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-zinc-200 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/50">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -73,23 +71,9 @@ function Nav() {
           </a>
         </nav>
         <div className="flex items-center gap-3">
-          {status === "loading" ? (
-            <span className="hidden text-sm text-zinc-500 sm:inline">{DEV_USER.name}</span>
-          ) : (
-            <>
-              <span className="hidden max-w-[10rem] truncate text-sm text-zinc-600 sm:inline">
-                {currentUser.name ?? currentUser.email}
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                className="hidden sm:inline-flex"
-                onClick={() => void signOut({ callbackUrl: "/" })}
-              >
-                Salir
-              </Button>
-            </>
-          )}
+          <span className="hidden max-w-[10rem] truncate text-sm text-zinc-600 sm:inline">
+            {currentUser.name ?? currentUser.email}
+          </span>
           <Button
             type="button"
             className="rounded-2xl"
@@ -210,7 +194,7 @@ const howSteps: { icon: IconComponent; title: string; desc: string }[] = [
   {
     icon: Camera,
     title: "Publicá tu pieza",
-    desc: "Iniciá sesión con Google, subí fotos claras y detalles. Podemos ayudarte con el set de fotos pro.",
+    desc: "Iniciá sesión con tu email, subí fotos claras y detalles. Podemos ayudarte con el set de fotos pro.",
   },
   {
     icon: Verified,
@@ -491,7 +475,7 @@ function CTA() {
             className="rounded-2xl"
             asChild
           >
-            <Link href="/login">Iniciar sesión con Google</Link>
+            <Link href="/login">Iniciar sesión</Link>
           </Button>
           <Button
             type="button"
@@ -504,7 +488,7 @@ function CTA() {
           </Button>
         </div>
         <p className="mt-3 text-sm text-zinc-600">
-          Continuá con Google para usar la plataforma
+          Iniciá sesión para usar la plataforma
         </p>
         <div className="mx-auto mt-8 max-w-md">
           <div className="flex gap-2">

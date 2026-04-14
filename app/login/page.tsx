@@ -7,12 +7,10 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  async function handleLogin(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
     setError("");
 
     const res = await fetch("/api/login", {
@@ -26,8 +24,7 @@ export default function LoginPage() {
     const data = await res.json();
 
     if (!res.ok) {
-      setError(data.error || "Login failed");
-      setLoading(false);
+      setError(data.error || "Error al iniciar sesión");
       return;
     }
 
@@ -35,12 +32,9 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <form
-        onSubmit={handleLogin}
-        className="bg-white p-6 rounded-xl shadow-md w-full max-w-sm flex flex-col gap-4"
-      >
-        <h1 className="text-xl font-semibold text-center">Iniciar sesión</h1>
+    <div className="min-h-screen flex items-center justify-center">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3 w-80">
+        <h1 className="text-xl font-bold">Iniciar sesión</h1>
 
         <input
           type="email"
@@ -48,7 +42,7 @@ export default function LoginPage() {
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
-          className="border px-3 py-2 rounded-md text-sm"
+          className="border p-2"
         />
 
         <input
@@ -57,20 +51,14 @@ export default function LoginPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
-          className="border px-3 py-2 rounded-md text-sm"
+          className="border p-2"
         />
 
-        {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+        {error && <p className="text-red-500 text-sm">{error}</p>}
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="bg-black text-white py-2 rounded-md text-sm"
-        >
-          {loading ? "Entrando..." : "Entrar"}
-        </button>
+        <button className="bg-black text-white p-2">Entrar</button>
 
-        <p className="text-sm text-center">
+        <p className="text-sm">
           ¿No tenés cuenta?{" "}
           <a href="/register" className="underline">
             Registrate

@@ -3,7 +3,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -20,7 +19,6 @@ export default function ListingDetailPage() {
   const params = useParams();
   const id = typeof params.id === "string" ? params.id : "";
   const router = useRouter();
-  const { data: session, status } = useSession();
   const [listing, setListing] = useState<ListingDetail | null>(null);
   const [existingNegotiation, setExistingNegotiation] =
     useState<NegotiationSummary | null>(null);
@@ -87,7 +85,7 @@ export default function ListingDetailPage() {
     };
   }, [id]);
 
-  const currentUserId = session?.user?.id ?? DEV_USER.id;
+  const currentUserId = DEV_USER.id;
   const isOwner =
     currentUserId && listing?.user.id
       ? currentUserId === listing.user.id
@@ -152,7 +150,7 @@ export default function ListingDetailPage() {
         </div>
       ) : null}
 
-      {!listing && !error && !loading && status !== "loading" ? (
+      {!listing && !error && !loading ? (
         <p className="text-neutral-600 dark:text-neutral-400">Listing unavailable.</p>
       ) : null}
 
@@ -236,8 +234,6 @@ export default function ListingDetailPage() {
                       </Link>
                     </Button>
                   </div>
-                ) : status === "loading" ? (
-                  <p className="text-sm text-neutral-500">Checking your account…</p>
                 ) : isOwner ? (
                   <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-4 text-sm text-zinc-600">
                     You own this listing, so the buyer action is hidden here.

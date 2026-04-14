@@ -1,10 +1,7 @@
-import { getServerSession } from "@/lib/auth-session";
-
 export default async function SellLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  await getServerSession();
   return <>{children}</>;
 }

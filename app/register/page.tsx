@@ -1,99 +1,75 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 
 export default function RegisterPage() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
 
-  const handleRegister = useCallback(async () => {
-    setBusy(true);
-    setError(null);
-    setSuccess(null);s
-    try {
-      const res = await fetch("/api/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => null)) as { error?: string } | null;
-        setError(j?.error ?? "Registration failed");
-        setBusy(false);
-        return;
-      }
-      setSuccess("Cuenta creada. Ahora iniciá sesión.");
-      setBusy(false);
-      router.push("/login");
-    } catch {
-      setError("Registration failed");
-      setBusy(false);
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setSuccess("");
+
+    const res = await fetch("/api/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      setError(data.error || "Error al registrarse");
+      return;
     }
-  }, [email, password, router]);
+
+    setSuccess("Cuenta creada. Redirigiendo a login...");
+    router.push("/login");
+  }
 
   return (
-    <main className="mx-auto flex min-h-full max-w-md flex-1 flex-col gap-6 px-6 py-16">
-      <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Crear cuenta</h1>
-        <p className="text-sm text-neutral-600 dark:text-neutral-400">
-          Registrate con email y contraseña.
-        </p>
-      </div>
+    <div className="min-h-screen flex items-center justify-center">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3 w-80">
+        <h1 className="text-xl font-bold">Registrate</h1>
 
-      {error ? (
-        <p
-          className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-900 dark:bg-red-950/40 dark:text-red-200"
-          role="alert"
-        >
-          {error}
-        </p>
-      ) : null}
+        <input
+          type="email"
+          placeholder="Email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          className="border p-2"
+        />
 
-      {success ? (
-        <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200">
-          {success}
-        </p>
-      ) : null}
+        <input
+          type="password"
+          placeholder="Contraseña"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          className="border p-2"
+        />
 
-      <div className="grid gap-3">
-        <label className="text-sm text-neutral-700 dark:text-neutral-300">
-          Email
-          <Input
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            type="email"
-            className="mt-1"
-            autoComplete="email"
-          />
-        </label>
-        <label className="text-sm text-neutral-700 dark:text-neutral-300">
-          Contraseña
-          <Input
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            type="password"
-            className="mt-1"
-            autoComplete="new-password"
-          />
-        </label>
-        <Button
-          type="button"
-          size="lg"
-          className="w-full"
-          disabled={busy}
-          onClick={() => void handleRegister()}
-        >
-          {busy ? "Creando…" : "Crear cuenta"}
-        </Button>
-      </div>
-    </main>
+        {error && <p className="text-red-500 text-sm">{error}</p>}
+        {success && <p className="text-green-600 text-sm">{success}</p>}
+
+        <button className="bg-black text-white p-2">Crear cuenta</button>
+
+        <p className="text-sm">
+          ¿Ya tenés cuenta?{" "}
+          <a href="/login" className="underline">
+            Iniciar sesión
+          </a>
+        </p>
+      </form>
+    </div>
   );
 }
 

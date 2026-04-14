@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useSession } from "next-auth/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import type {
@@ -29,7 +28,6 @@ function statusBadgeVariant(status: OfferDto["status"] | NegotiationSummary["sta
 export default function NegotiationPage() {
   const params = useParams();
   const id = typeof params.id === "string" ? params.id : "";
-  const { data: session, status } = useSession();
 
   const [negotiation, setNegotiation] = useState<NegotiationSummary | null>(null);
   const [listing, setListing] = useState<ListingDetail | null>(null);
@@ -94,7 +92,7 @@ export default function NegotiationPage() {
     void loadAll();
   }, [loadAll]);
 
-  const userId = session?.user?.id ?? DEV_USER.id;
+  const userId = DEV_USER.id;
   const sellerId = listing?.user.id;
 
   const role = useMemo(() => {
