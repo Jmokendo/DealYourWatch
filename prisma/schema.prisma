@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -8,118 +9,65 @@ datasource db {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  emailVerified DateTime? @map("email_verified")
-  name          String?
-  image         String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-
-  accounts           Account[]
-  sessions           Session[]
-  listings           Listing[]
-  offers             Offer[]
-  buyerThreads       Thread[]      @relation("BuyerThreads")
-  buyerNegotiations  Negotiation[] @relation("NegotiationBuyer")
-  salesAsSeller      Sale[]        @relation("SaleSeller")
-  salesAsBuyer       Sale[]        @relation("SaleBuyer")
-  messagesSent       Message[]
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String?
+  image        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  listings     Listing[]
+  offers       Offer[]
+  buyerThreads Thread[]  @relation("BuyerThreads")
 
   @@map("users")
 }
 
-model Account {
-  id                String  @id @default(cuid())
-  userId            String  @map("user_id")
-  type              String
-  provider          String
-  providerAccountId String  @map("provider_account_id")
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-  @@map("accounts")
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique @map("session_token")
-  userId       String   @map("user_id")
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("sessions")
-}
-
-model VerificationToken {
-  identifier String
-  token      String
-  expires    DateTime
-
-  @@unique([identifier, token])
-  @@map("verification_tokens")
-}
-
 model Brand {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  slug      String   @unique
-  createdAt DateTime @default(now())
-
+  id        String       @id @default(cuid())
+  name      String       @unique
+  slug      String       @unique
+  createdAt DateTime     @default(now())
   models    WatchModel[]
 
   @@map("brands")
 }
 
 model WatchModel {
-  id        String   @id @default(cuid())
-  brandId   String
-  name      String
-  slug      String
-  reference String?
-  createdAt DateTime @default(now())
-
-  brand     Brand      @relation(fields: [brandId], references: [id])
-  listings  Listing[]
+  id         String      @id @default(cuid())
+  brandId    String
+  name       String
+  slug       String
+  reference  String?
+  createdAt  DateTime    @default(now())
+  listings   Listing[]
   valuations Valuation[]
+  brand      Brand       @relation(fields: [brandId], references: [id])
 
   @@unique([brandId, slug])
   @@map("watch_models")
 }
 
 model Listing {
-  id          String        @id @default(cuid())
-  userId      String
-  modelId     String
-  title       String
-  description String?
-  price       Decimal       @db.Decimal(12, 2)
-  currency    String        @default("USD")
-  condition   Condition
-  hasBox      Boolean       @default(false)
-  hasPapers   Boolean       @default(false)
-  status      ListingStatus @default(PENDING)
-  soldAt      DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  user         User          @relation(fields: [userId], references: [id])
-  model        WatchModel    @relation(fields: [modelId], references: [id])
+  id           String         @id @default(cuid())
+  userId       String
+  modelId      String
+  title        String
+  description  String?
+  price        Decimal        @db.Decimal(12, 2)
+  currency     String         @default("USD")
+  condition    Condition
+  hasBox       Boolean        @default(false)
+  hasPapers    Boolean        @default(false)
+  status       ListingStatus  @default(PENDING)
+  soldAt       DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
   images       ListingImage[]
-  valuation    Valuation?
+  model        WatchModel     @relation(fields: [modelId], references: [id])
+  user         User           @relation(fields: [userId], references: [id])
   negotiations Negotiation[]
-  sale         Sale?
+  valuation    Valuation?
 
-  @@index([status, createdAt])
-  @@index([modelId])
   @@map("listings")
 }
 
@@ -129,28 +77,26 @@ model ListingImage {
   url       String
   order     Int      @default(0)
   createdAt DateTime @default(now())
-
   listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
   @@map("listing_images")
 }
 
 model Valuation {
-  id              String     @id @default(cuid())
-  listingId       String     @unique
-  modelId         String
-  chrono24Price   Decimal?   @db.Decimal(12, 2)
-  mlPrice         Decimal?   @db.Decimal(12, 2)
-  localDelta      Decimal?   @db.Decimal(5, 2)
-  conditionDelta  Decimal?   @db.Decimal(5, 2)
-  boxPapersDelta  Decimal?   @db.Decimal(5, 2)
-  notes           String?
-  sources         Json       @default("[]")
-  createdAt       DateTime   @default(now())
-  updatedAt       DateTime   @updatedAt
-
-  listing         Listing    @relation(fields: [listingId], references: [id])
-  model           WatchModel @relation(fields: [modelId], references: [id])
+  id             String     @id @default(cuid())
+  listingId      String     @unique
+  modelId        String
+  chrono24Price  Decimal?   @db.Decimal(12, 2)
+  mlPrice        Decimal?   @db.Decimal(12, 2)
+  localDelta     Decimal?   @db.Decimal(5, 2)
+  conditionDelta Decimal?   @db.Decimal(5, 2)
+  boxPapersDelta Decimal?   @db.Decimal(5, 2)
+  notes          String?
+  sources        Json       @default("[]")
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  listing        Listing    @relation(fields: [listingId], references: [id])
+  model          WatchModel @relation(fields: [modelId], references: [id])
 
   @@map("valuations")
 }
@@ -164,13 +110,10 @@ model Negotiation {
   expiresAt DateTime
   createdAt DateTime          @default(now())
   updatedAt DateTime          @updatedAt
-
   listing   Listing           @relation(fields: [listingId], references: [id])
-  buyer     User              @relation("NegotiationBuyer", fields: [buyerId], references: [id])
   offers    Offer[]
   thread    Thread?
 
-  @@index([listingId, buyerId])
   @@map("negotiations")
 }
 
@@ -184,7 +127,6 @@ model Offer {
   reasonNote    String?
   status        OfferStatus @default(PENDING)
   createdAt     DateTime    @default(now())
-
   negotiation   Negotiation @relation(fields: [negotiationId], references: [id])
   user          User        @relation(fields: [userId], references: [id])
 
@@ -192,14 +134,13 @@ model Offer {
 }
 
 model Thread {
-  id            String    @id @default(cuid())
-  negotiationId String    @unique
+  id            String      @id @default(cuid())
+  negotiationId String      @unique
   buyerId       String
-  createdAt     DateTime  @default(now())
-
-  negotiation   Negotiation @relation(fields: [negotiationId], references: [id])
-  buyer         User        @relation("BuyerThreads", fields: [buyerId], references: [id])
+  createdAt     DateTime    @default(now())
   messages      Message[]
+  buyer         User        @relation("BuyerThreads", fields: [buyerId], references: [id])
+  negotiation   Negotiation @relation(fields: [negotiationId], references: [id])
 
   @@map("threads")
 }
@@ -211,27 +152,19 @@ model Message {
   content   String
   isSystem  Boolean  @default(false)
   createdAt DateTime @default(now())
-
   thread    Thread   @relation(fields: [threadId], references: [id])
-  sender    User?    @relation(fields: [senderId], references: [id])
 
-  @@index([threadId, createdAt])
   @@map("messages")
 }
 
-// Sale is recorded when a listing is marked sold; keeps history even if listing row is archived later.
 model Sale {
-  id          String   @id @default(cuid())
-  listingId   String   @unique
-  sellerId    String
-  buyerId     String?
-  finalPrice  Decimal? @db.Decimal(12, 2)
-  currency    String   @default("USD")
-  reportedAt  DateTime @default(now())
-
-  listing  Listing @relation(fields: [listingId], references: [id])
-  seller   User    @relation("SaleSeller", fields: [sellerId], references: [id])
-  buyer    User?   @relation("SaleBuyer", fields: [buyerId], references: [id])
+  id         String   @id @default(cuid())
+  listingId  String   @unique
+  sellerId   String
+  buyerId    String?
+  finalPrice Decimal? @db.Decimal(12, 2)
+  currency   String   @default("USD")
+  reportedAt DateTime @default(now())
 
   @@map("sales")
 }

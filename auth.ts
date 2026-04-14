@@ -1,34 +1,32 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import { getPrisma } from "@/lib/prisma";
+import { PrismaClient } from "@prisma/client";
 
-const prisma = getPrisma();
-const authSecret = process.env.NEXTAUTH_SECRET ?? process.env.AUTH_SECRET;
-const googleClientId =
-  process.env.GOOGLE_CLIENT_ID ?? process.env.AUTH_GOOGLE_ID;
-const googleClientSecret =
-  process.env.GOOGLE_CLIENT_SECRET ?? process.env.AUTH_GOOGLE_SECRET;
-const hasGoogleProviderConfig = Boolean(
-  googleClientId?.trim() && googleClientSecret?.trim(),
-);
+const globalForPrisma = globalThis as unknown as {
+  prisma: PrismaClient | undefined;
+};
+
+export const prisma =
+  globalForPrisma.prisma ??
+  new PrismaClient();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForPrisma.prisma = prisma;
+}
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
-  ...(authSecret ? { secret: authSecret } : {}),
-  adapter: prisma ? PrismaAdapter(prisma) : undefined,
-  session: prisma
-    ? { strategy: "database", maxAge: 30 * 24 * 60 * 60 }
-    : { strategy: "jwt", maxAge: 30 * 24 * 60 * 60 },
-  providers: hasGoogleProviderConfig
-    ? [
-        Google({
-          clientId: googleClientId!,
-          clientSecret: googleClientSecret!,
-          allowDangerousEmailAccountLinking: true,
-        }),
-      ]
-    : [],
+  secret: process.env.NEXTAUTH_SECRET,
+  adapter: PrismaAdapter(prisma),
+  session: { strategy: "database", maxAge: 30 * 24 * 60 * 60 },
+  providers: [
+    Google({
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
+      allowDangerousEmailAccountLinking: true,
+    }),
+  ],
   pages: {
     signIn: "/login",
   },

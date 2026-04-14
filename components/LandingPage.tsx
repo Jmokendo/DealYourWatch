@@ -217,7 +217,7 @@ const howSteps: { icon: IconComponent; title: string; desc: string }[] = [
   {
     icon: Camera,
     title: "Publicá tu pieza",
-    desc: "Creá tu cuenta, subí fotos claras y detalles. Podemos ayudarte con el set de fotos pro.",
+    desc: "Iniciá sesión con Google, subí fotos claras y detalles. Podemos ayudarte con el set de fotos pro.",
   },
   {
     icon: Verified,
@@ -491,14 +491,14 @@ function CTA() {
         <p className="mt-3 text-zinc-600">
           Unite a los primeros vendedores y compradores verificados en Watchs.
         </p>
-        <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
+        <div className="mt-6 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <Button
             type="button"
             size="lg"
             className="rounded-2xl"
             asChild
           >
-            <Link href="/listings">Crear cuenta</Link>
+            <Link href="/login">Iniciar sesión con Google</Link>
           </Button>
           <Button
             type="button"
@@ -510,6 +510,9 @@ function CTA() {
             Hablar con un asesor
           </Button>
         </div>
+        <p className="mt-3 text-sm text-zinc-600">
+          Continuá con Google para usar la plataforma
+        </p>
         <div className="mx-auto mt-8 max-w-md">
           <div className="flex gap-2">
             <Input placeholder="Tu email" className="rounded-2xl" />
