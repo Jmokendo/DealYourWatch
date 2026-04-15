@@ -8,7 +8,7 @@ export async function getUserIdFromCookie() {
   if (!token) return null;
 
   try {
-    const decoded = jwt.verify(token, process.env.NEXTAUTH_SECRET!);
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!);
     return (decoded as { userId?: string }).userId ?? null;
   } catch {
     return null;

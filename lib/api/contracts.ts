@@ -32,7 +32,7 @@
  * - Listing detail: gallery, price, condition, box/papers, seller, CTA “Make offer”.
  * - Offer thread: messages + offer rounds (negotiation).
  * - Seller dashboard: my listings, negotiation status (later).
- * - Auth: NextAuth (Google) + session; mutations use session user (no email fields in POST bodies).
+ * - Auth: custom JWT auth with token cookie; mutations use session user (no email fields in POST bodies).
  *
  * QA / failure points (test early)
  * --------------------------------
