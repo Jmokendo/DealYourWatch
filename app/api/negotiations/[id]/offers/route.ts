@@ -2,7 +2,7 @@ import { isApiMockMode } from "@/lib/env";
 import { getPrisma } from "@/lib/prisma";
 import { jsonError, jsonOk } from "@/lib/api/http";
 import type { CreateOfferBody, OfferDto } from "@/lib/api/contracts";
-import { getUserIdFromCookie } from "@/lib/getUser";
+import { requireAuthUser } from "@/lib/auth-session";
 import {
   mockListings,
   mockNegotiationById,
@@ -42,7 +42,8 @@ export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const userId = (await getUserIdFromCookie()) || "dev-user-1";
+  const user = await requireAuthUser();
+  if (!user) return jsonError("Unauthorized", 401);
 
   const { id } = await ctx.params;
 
@@ -51,7 +52,7 @@ export async function GET(
     if (!neg) return jsonError("Negotiation not found", 404);
     const sellerId = mockListingSellerId(neg.listingId);
     if (!sellerId) return jsonError("Listing not found", 404);
-    if (!isNegotiationParticipant(userId, neg.buyerId, sellerId)) {
+    if (!isNegotiationParticipant(user.id, neg.buyerId, sellerId)) {
       return jsonError("Forbidden", 403);
     }
     return jsonOk([...(mockOffersByNegotiation[id] ?? [])]);
@@ -63,7 +64,7 @@ export async function GET(
   const neg = await loadNegotiationWithSeller(db, id);
   if (!neg) return jsonError("Negotiation not found", 404);
   const sellerId = neg.listing.userId;
-  if (!isNegotiationParticipant(userId, neg.buyerId, sellerId)) {
+  if (!isNegotiationParticipant(user.id, neg.buyerId, sellerId)) {
     return jsonError("Forbidden", 403);
   }
 
@@ -78,7 +79,8 @@ export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const userId = (await getUserIdFromCookie()) || "dev-user-1";
+  const user = await requireAuthUser();
+  if (!user) return jsonError("Unauthorized", 401);
 
   const { id } = await ctx.params;
   let raw: unknown;
@@ -111,7 +113,7 @@ export async function POST(
     if (!neg) return jsonError("Negotiation not found", 404);
     const sellerId = mockListingSellerId(neg.listingId);
     if (!sellerId) return jsonError("Listing not found", 404);
-    if (!isNegotiationParticipant(userId, neg.buyerId, sellerId)) {
+    if (!isNegotiationParticipant(user.id, neg.buyerId, sellerId)) {
       return jsonError("Forbidden", 403);
     }
     if (neg.status !== "ACTIVE") {
@@ -129,7 +131,7 @@ export async function POST(
         409,
       );
     }
-    if (userId !== neg.buyerId) {
+    if (user.id !== neg.buyerId) {
       return jsonError("Only the buyer can place the opening offer", 403);
     }
 
@@ -137,7 +139,7 @@ export async function POST(
     const offer: OfferDto = {
       id: `mock-offer-${Date.now()}`,
       negotiationId: id,
-      userId,
+      userId: user.id,
       amount: amount.toFixed(2),
       currency: body.currency ?? "USD",
       reasonType: resolvedReasonType,
@@ -159,7 +161,7 @@ export async function POST(
     return jsonError("Listing is sold", 409);
   }
   const sellerId = neg.listing.userId;
-  if (!isNegotiationParticipant(userId, neg.buyerId, sellerId)) {
+  if (!isNegotiationParticipant(user.id, neg.buyerId, sellerId)) {
     return jsonError("Forbidden", 403);
   }
   if (neg.status !== "ACTIVE") {
@@ -173,14 +175,14 @@ export async function POST(
       409,
     );
   }
-  if (userId !== neg.buyerId) {
+  if (user.id !== neg.buyerId) {
     return jsonError("Only the buyer can place the opening offer", 403);
   }
 
   const row = await db.offer.create({
     data: {
       negotiationId: id,
-      userId,
+      userId: user.id,
       amount: body.amount,
       currency: body.currency ?? "USD",
       reasonType: resolvedReasonType,

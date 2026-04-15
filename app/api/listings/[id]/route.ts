@@ -1,115 +1,194 @@
-import { isApiMockMode } from "@/lib/env";
 import { getPrisma } from "@/lib/prisma";
-import { jsonError, jsonOk } from "@/lib/api/http";
-import { mockListings } from "@/lib/api/mock-data";
-import { toListingDetail } from "@/lib/api/serialize-listing";
-import type { ListingDetail, PatchListingBody } from "@/lib/api/contracts";
-import { mockValuations } from "@/lib/api/mock-data";
-import { getUserIdFromCookie } from "@/lib/getUser";
+import { ok, badRequest, notFound, serverError } from "@/lib/api";
+import { Condition, Prisma } from "@prisma/client";
 
-const detailInclude = {
-  images: { orderBy: { order: "asc" as const } },
-  model: { include: { brand: true } },
-  user: true,
-  valuation: true,
-} as const;
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
 
-export async function GET(
-  _req: Request,
-  ctx: { params: Promise<{ id: string }> },
-) {
-  const { id } = await ctx.params;
+const VALID_CONDITIONS: Condition[] = ["NEW", "MINT", "EXCELLENT", "GOOD", "FAIR"];
 
-  if (isApiMockMode()) {
-    const found = mockListings.find((l) => l.id === id);
-    if (!found) return jsonError("Listing not found", 404);
-    const detail: ListingDetail = {
-      ...found,
-      valuation: mockValuations[id] ?? null,
+function toDetail(
+  row: Prisma.ListingGetPayload<{
+    include: {
+      model: { include: { brand: true } };
+      user: { select: { id: true; name: true; email: true } };
+      images: { orderBy: { order: "asc" } };
+      negotiations: {
+        select: {
+          id: true;
+          status: true;
+          offers: { select: { amount: true; status: true }; orderBy: { amount: "desc" }; take: 1 };
+        };
+      };
     };
-    return jsonOk(detail);
-  }
+  }>,
+) {
+  const activeNegotiations = row.negotiations.filter(
+    (n) => n.status === "ACTIVE",
+  ).length;
 
-  const db = getPrisma();
-  if (!db) {
-    const found = mockListings.find((l) => l.id === id);
-    if (!found) return jsonError("Listing not found", 404);
-    return jsonOk({ ...found, valuation: mockValuations[id] ?? null });
-  }
+  const bestOffer = row.negotiations
+    .flatMap((n) => n.offers)
+    .filter((o) => o.status !== "REJECTED" && o.status !== "WITHDRAWN")
+    .reduce<string | null>((best, o) => {
+      const amt = o.amount.toString();
+      if (best === null) return amt;
+      return parseFloat(amt) > parseFloat(best) ? amt : best;
+    }, null);
 
-  const row = await db.listing.findUnique({
-    where: { id },
-    include: detailInclude,
-  });
-
-  if (!row) return jsonError("Listing not found", 404);
-  return jsonOk(toListingDetail(row));
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    price: row.price.toString(),
+    currency: row.currency,
+    condition: row.condition,
+    year: row.year,
+    hasBox: row.hasBox,
+    hasPapers: row.hasPapers,
+    status: row.status,
+    soldAt: row.soldAt?.toISOString() ?? null,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    brand: {
+      id: row.model.brand.id,
+      name: row.model.brand.name,
+      slug: row.model.brand.slug,
+    },
+    model: {
+      id: row.model.id,
+      name: row.model.name,
+      slug: row.model.slug,
+      reference: row.model.reference,
+    },
+    seller: {
+      id: row.user.id,
+      name: row.user.name,
+      email: row.user.email,
+    },
+    images: row.images.map((img) => ({
+      id: img.id,
+      url: img.url,
+      order: img.order,
+    })),
+    negotiationsCount: row.negotiations.length,
+    activeNegotiationsCount: activeNegotiations,
+    bestOffer,
+  };
 }
 
+const detailInclude = {
+  model: { include: { brand: true } },
+  user: { select: { id: true, name: true, email: true } },
+  images: { orderBy: { order: "asc" as const } },
+  negotiations: {
+    select: {
+      id: true,
+      status: true,
+      offers: {
+        select: { amount: true, status: true },
+        orderBy: { amount: "desc" as const },
+        take: 1,
+      },
+    },
+  },
+} as const;
+
+// ---------------------------------------------------------------------------
+// GET /api/listings/[id]
+// ---------------------------------------------------------------------------
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const db = getPrisma();
+  if (!db) return serverError("Database not configured");
+
+  const { id } = await params;
+
+  try {
+    const row = await db.listing.findUnique({ where: { id }, include: detailInclude });
+
+    if (!row) return notFound("Listing");
+    if (row.status === "DELETED") return notFound("Listing");
+
+    return ok(toDetail(row));
+  } catch (e) {
+    return serverError(e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// PATCH /api/listings/[id]  — partial field update (NO status changes here)
+// ---------------------------------------------------------------------------
 export async function PATCH(
   req: Request,
-  ctx: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const userId = (await getUserIdFromCookie()) || "dev-user-1";
-
-  const { id } = await ctx.params;
-
-  if (isApiMockMode()) {
-    const found = mockListings.find((l) => l.id === id);
-    if (!found) return jsonError("Listing not found", 404);
-    if (found.user.id !== userId) return jsonError("Forbidden", 403);
-    let body: PatchListingBody;
-    try {
-      body = (await req.json()) as PatchListingBody;
-    } catch {
-      return jsonError("Invalid JSON body", 400);
-    }
-    if (body.title !== undefined) found.title = body.title;
-    if (body.description !== undefined) found.description = body.description;
-    if (body.price !== undefined) found.price = body.price.toFixed(2);
-    if (body.condition !== undefined) found.condition = body.condition;
-    if (body.status !== undefined) found.status = body.status;
-    if (body.hasBox !== undefined) found.hasBox = body.hasBox;
-    if (body.hasPapers !== undefined) found.hasPapers = body.hasPapers;
-    found.updatedAt = new Date().toISOString();
-    const detail: ListingDetail = {
-      ...found,
-      valuation: mockValuations[id] ?? null,
-    };
-    return jsonOk(detail);
-  }
-
   const db = getPrisma();
-  if (!db) return jsonError("Database not configured", 503);
+  if (!db) return serverError("Database not configured");
 
-  const existing = await db.listing.findUnique({ where: { id } });
-  if (!existing) return jsonError("Listing not found", 404);
-  if (existing.userId !== userId) return jsonError("Forbidden", 403);
+  const { id } = await params;
 
-  let body: PatchListingBody;
+  let raw: unknown;
   try {
-    body = (await req.json()) as PatchListingBody;
+    raw = await req.json();
   } catch {
-    return jsonError("Invalid JSON body", 400);
+    return badRequest("JSON inválido");
+  }
+  const body = raw as Record<string, unknown>;
+
+  // Reject status changes — those belong to PATCH /status
+  if ("status" in body) {
+    return badRequest("Para cambiar el estado usa PATCH /api/listings/:id/status");
   }
 
-  const data: Record<string, unknown> = {};
-  if (body.title !== undefined) data.title = body.title;
-  if (body.description !== undefined) data.description = body.description;
-  if (body.price !== undefined) data.price = body.price;
-  if (body.condition !== undefined) data.condition = body.condition;
-  if (body.status !== undefined) data.status = body.status;
-  if (body.hasBox !== undefined) data.hasBox = body.hasBox;
-  if (body.hasPapers !== undefined) data.hasPapers = body.hasPapers;
+  const data: Prisma.ListingUpdateInput = {};
+
+  if (typeof body.title === "string" && body.title.trim()) {
+    data.title = body.title.trim();
+  }
+  if ("description" in body) {
+    data.description =
+      body.description === null ? null : String(body.description).trim();
+  }
+  if (typeof body.price === "number") {
+    if (!Number.isFinite(body.price) || body.price <= 0) {
+      return badRequest("El precio debe ser un número positivo");
+    }
+    data.price = body.price;
+  }
+  if (typeof body.currency === "string") {
+    data.currency = body.currency.toUpperCase();
+  }
+  if (typeof body.condition === "string") {
+    if (!VALID_CONDITIONS.includes(body.condition as Condition)) {
+      return badRequest(`Condición inválida. Valores válidos: ${VALID_CONDITIONS.join(", ")}`);
+    }
+    data.condition = body.condition as Condition;
+  }
+  if (typeof body.year === "number" || body.year === null) {
+    data.year = body.year as number | null;
+  }
+  if (typeof body.hasBox === "boolean") data.hasBox = body.hasBox;
+  if (typeof body.hasPapers === "boolean") data.hasPapers = body.hasPapers;
+
+  if (Object.keys(data).length === 0) {
+    return badRequest("No se proporcionaron campos para actualizar");
+  }
 
   try {
+    const existing = await db.listing.findUnique({ where: { id } });
+    if (!existing || existing.status === "DELETED") return notFound("Listing");
+
     const row = await db.listing.update({
       where: { id },
       data,
       include: detailInclude,
     });
-    return jsonOk(toListingDetail(row));
-  } catch {
-    return jsonError("Listing not found", 404);
+    return ok(toDetail(row));
+  } catch (e) {
+    return serverError(e);
   }
 }

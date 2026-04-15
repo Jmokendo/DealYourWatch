@@ -3,7 +3,13 @@ import { getPrisma } from "@/lib/prisma";
 import { jsonError, jsonOk } from "@/lib/api/http";
 import type { CreateMessageBody, MessageDto } from "@/lib/api/contracts";
 import { mockMessagesByThread } from "@/lib/api/mock-data";
-import { getUserIdFromCookie } from "@/lib/getUser";
+import { requireAuthUser } from "@/lib/auth-session";
+import {
+  isNegotiationParticipant,
+  loadThreadWithNegotiationAccess,
+  mockListingSellerId,
+  mockNegotiationForThread,
+} from "@/lib/api/negotiation-access";
 
 function toMessageDto(m: {
   id: string;
@@ -27,17 +33,36 @@ export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  const user = await requireAuthUser();
+  if (!user) return jsonError("Unauthorized", 401);
+
   const { id } = await ctx.params;
 
   if (isApiMockMode()) {
+    const negotiation = mockNegotiationForThread(id);
+    if (!negotiation) return jsonError("Thread not found", 404);
+    const sellerId = mockListingSellerId(negotiation.listingId);
+    if (!sellerId) return jsonError("Listing not found", 404);
+    if (!isNegotiationParticipant(user.id, negotiation.buyerId, sellerId)) {
+      return jsonError("Forbidden", 403);
+    }
     return jsonOk([...(mockMessagesByThread[id] ?? [])]);
   }
 
   const db = getPrisma();
   if (!db) return jsonOk([]);
 
-  const thread = await db.thread.findUnique({ where: { id } });
+  const thread = await loadThreadWithNegotiationAccess(db, id);
   if (!thread) return jsonError("Thread not found", 404);
+  if (
+    !isNegotiationParticipant(
+      user.id,
+      thread.negotiation.buyerId,
+      thread.negotiation.listing.userId,
+    )
+  ) {
+    return jsonError("Forbidden", 403);
+  }
 
   const rows = await db.message.findMany({
     where: { threadId: id },
@@ -50,6 +75,9 @@ export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
+  const user = await requireAuthUser();
+  if (!user) return jsonError("Unauthorized", 401);
+
   const { id } = await ctx.params;
   let raw: unknown;
   try {
@@ -63,7 +91,9 @@ export async function POST(
 
   const isSystem: boolean =
     typeof o.isSystem === "boolean" ? o.isSystem : false;
-  const userId = isSystem ? null : (await getUserIdFromCookie()) || "dev-user-1";
+  if (isSystem) return jsonError("Only the server can create system messages", 403);
+
+  const userId = isSystem ? null : user.id;
 
   const body: CreateMessageBody = {
     content,
@@ -71,6 +101,14 @@ export async function POST(
   };
 
   if (isApiMockMode()) {
+    const negotiation = mockNegotiationForThread(id);
+    if (!negotiation) return jsonError("Thread not found", 404);
+    const sellerId = mockListingSellerId(negotiation.listingId);
+    if (!sellerId) return jsonError("Listing not found", 404);
+    if (!isNegotiationParticipant(user.id, negotiation.buyerId, sellerId)) {
+      return jsonError("Forbidden", 403);
+    }
+
     const now = new Date().toISOString();
     const msg: MessageDto = {
       id: `mock-msg-${Date.now()}`,
@@ -88,8 +126,17 @@ export async function POST(
   const db = getPrisma();
   if (!db) return jsonError("Database not configured", 503);
 
-  const thread = await db.thread.findUnique({ where: { id } });
+  const thread = await loadThreadWithNegotiationAccess(db, id);
   if (!thread) return jsonError("Thread not found", 404);
+  if (
+    !isNegotiationParticipant(
+      user.id,
+      thread.negotiation.buyerId,
+      thread.negotiation.listing.userId,
+    )
+  ) {
+    return jsonError("Forbidden", 403);
+  }
 
   const senderId = body.isSystem ? null : userId;
 

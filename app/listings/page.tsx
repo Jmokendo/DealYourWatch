@@ -1,17 +1,15 @@
 "use client";
 
-import Image from "next/image";
-import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
+import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import type { Condition, ListingSummary } from "@/lib/api/contracts";
-import { cn } from "@/lib/utils";
-import { formatMoney, getConditionLabel } from "@/lib/marketplace-ui";
+import { ListingCard } from "./_components/ListingCard";
 
-const conditions: Array<{ value: "" | Condition; label: string }> = [
-  { value: "", label: "Any condition" },
+// ─── Filter config ────────────────────────────────────────────────────────────
+
+const conditionChips: Array<{ value: "" | Condition; label: string }> = [
+  { value: "", label: "Todos" },
   { value: "NEW", label: "New" },
   { value: "MINT", label: "Mint" },
   { value: "EXCELLENT", label: "Excellent" },
@@ -19,13 +17,71 @@ const conditions: Array<{ value: "" | Condition; label: string }> = [
   { value: "FAIR", label: "Fair" },
 ];
 
+type PriceRange = "" | "0-5000" | "5000-15000" | "15000-50000" | "50000+";
+
+const priceChips: Array<{ value: PriceRange; label: string }> = [
+  { value: "", label: "Cualquier precio" },
+  { value: "0-5000", label: "< $5.000" },
+  { value: "5000-15000", label: "$5.000 – $15.000" },
+  { value: "15000-50000", label: "$15.000 – $50.000" },
+  { value: "50000+", label: "$50.000+" },
+];
+
+// ─── Chip button ─────────────────────────────────────────────────────────────
+
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-medium transition ${
+        active
+          ? "border-zinc-900 bg-zinc-900 text-white"
+          : "border-zinc-200 bg-white text-zinc-600 hover:border-zinc-400 hover:bg-zinc-50"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ─── Skeleton ────────────────────────────────────────────────────────────────
+
+function CardSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white">
+      <div className="aspect-[4/3] animate-pulse bg-zinc-100" />
+      <div className="space-y-3 p-4">
+        <div className="space-y-1.5">
+          <div className="h-2.5 w-16 animate-pulse rounded-full bg-zinc-100" />
+          <div className="h-4 w-3/4 animate-pulse rounded bg-zinc-100" />
+        </div>
+        <div className="h-7 w-1/2 animate-pulse rounded bg-zinc-100" />
+        <div className="flex gap-1.5">
+          <div className="h-6 w-20 animate-pulse rounded-full bg-zinc-100" />
+          <div className="h-6 w-24 animate-pulse rounded-full bg-zinc-100" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function ListingsPage() {
   const [listings, setListings] = useState<ListingSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [brandFilter, setBrandFilter] = useState("");
+  const [query, setQuery] = useState("");
   const [conditionFilter, setConditionFilter] = useState<"" | Condition>("");
-  const [minPrice, setMinPrice] = useState("");
-  const [maxPrice, setMaxPrice] = useState("");
+  const [priceRange, setPriceRange] = useState<PriceRange>("");
 
   useEffect(() => {
     let cancelled = false;
@@ -34,7 +90,7 @@ export default function ListingsPage() {
       try {
         const res = await fetch("/api/listings?status=APPROVED");
         if (!res.ok) {
-          if (!cancelled) setError("We couldn't load listings right now.");
+          if (!cancelled) setError("No pudimos cargar los listings ahora.");
           return;
         }
         const data = (await res.json()) as ListingSummary[];
@@ -43,7 +99,7 @@ export default function ListingsPage() {
           setError(null);
         }
       } catch {
-        if (!cancelled) setError("We couldn't load listings right now.");
+        if (!cancelled) setError("No pudimos cargar los listings ahora.");
       }
     })();
 
@@ -55,191 +111,189 @@ export default function ListingsPage() {
   const filteredListings = useMemo(() => {
     if (!listings) return [];
 
-    const min = Number.parseFloat(minPrice);
-    const max = Number.parseFloat(maxPrice);
-
     return listings.filter((listing) => {
       const price = Number.parseFloat(listing.price);
-      const matchesBrand = brandFilter
-        ? listing.model.brand.name
-            .toLowerCase()
-            .includes(brandFilter.trim().toLowerCase())
+      const q = query.trim().toLowerCase();
+
+      const matchesQuery = q
+        ? listing.title.toLowerCase().includes(q) ||
+          listing.model.brand.name.toLowerCase().includes(q) ||
+          listing.model.name.toLowerCase().includes(q)
         : true;
+
       const matchesCondition = conditionFilter
         ? listing.condition === conditionFilter
         : true;
-      const matchesMin = Number.isFinite(min) ? price >= min : true;
-      const matchesMax = Number.isFinite(max) ? price <= max : true;
 
-      return matchesBrand && matchesCondition && matchesMin && matchesMax;
+      const matchesPrice =
+        priceRange === ""
+          ? true
+          : priceRange === "0-5000"
+            ? price < 5000
+            : priceRange === "5000-15000"
+              ? price >= 5000 && price < 15000
+              : priceRange === "15000-50000"
+                ? price >= 15000 && price < 50000
+                : price >= 50000;
+
+      return matchesQuery && matchesCondition && matchesPrice;
     });
-  }, [brandFilter, conditionFilter, listings, maxPrice, minPrice]);
+  }, [query, conditionFilter, listings, priceRange]);
 
   const hasFilters =
-    brandFilter.trim() !== "" ||
-    conditionFilter !== "" ||
-    minPrice.trim() !== "" ||
-    maxPrice.trim() !== "";
+    query.trim() !== "" || conditionFilter !== "" || priceRange !== "";
+
+  function clearFilters() {
+    setQuery("");
+    setConditionFilter("");
+    setPriceRange("");
+  }
 
   return (
-    <main className="mx-auto flex min-h-full max-w-6xl flex-1 flex-col gap-8 px-6 py-16">
-      <section className="space-y-3">
-        <Badge variant="secondary" className="w-fit">
-          Marketplace
-        </Badge>
-        <div className="space-y-2">
-          <h1 className="text-3xl font-semibold tracking-tight">Explore listings</h1>
-          <p className="max-w-2xl text-sm text-neutral-600 dark:text-neutral-400">
-            Browse verified watches, compare pricing, and open the listing to make an offer.
-          </p>
-        </div>
-      </section>
+    <main className="mx-auto flex min-h-full max-w-7xl flex-1 flex-col gap-8 px-4 py-10 sm:px-6 lg:px-8">
+      {/* Header */}
+      <div className="space-y-1">
+        <h1 className="text-3xl font-bold tracking-tight text-zinc-950">Relojes</h1>
+        <p className="text-sm text-zinc-500">
+          Descubrí relojes verificados, comparás precios y hacés tu oferta.
+        </p>
+      </div>
 
-      <section className="grid gap-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-4 md:grid-cols-4">
-        <label className="text-sm text-zinc-700">
-          Brand
-          <Input
-            value={brandFilter}
-            onChange={(e) => setBrandFilter(e.target.value)}
-            placeholder="Rolex, Omega..."
-            className="mt-1 bg-white"
-          />
-        </label>
-        <label className="text-sm text-zinc-700">
-          Min price
-          <Input
-            type="number"
-            min={0}
-            step="0.01"
-            value={minPrice}
-            onChange={(e) => setMinPrice(e.target.value)}
-            placeholder="0"
-            className="mt-1 bg-white"
-          />
-        </label>
-        <label className="text-sm text-zinc-700">
-          Max price
-          <Input
-            type="number"
-            min={0}
-            step="0.01"
-            value={maxPrice}
-            onChange={(e) => setMaxPrice(e.target.value)}
-            placeholder="50000"
-            className="mt-1 bg-white"
-          />
-        </label>
-        <label className="text-sm text-zinc-700">
-          Condition
-          <select
-            value={conditionFilter}
-            onChange={(e) => setConditionFilter(e.target.value as "" | Condition)}
-            className="mt-1 flex h-10 w-full rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 focus-visible:ring-offset-2"
+      {/* Search bar */}
+      <div className="relative">
+        <Search
+          className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400"
+          aria-hidden="true"
+        />
+        <Input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="Buscar por marca, modelo o referencia..."
+          className="h-12 rounded-xl pl-11 pr-4 text-sm shadow-sm"
+        />
+        {query ? (
+          <button
+            type="button"
+            onClick={() => setQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-1 text-zinc-400 hover:text-zinc-700"
+            aria-label="Limpiar búsqueda"
           >
-            {conditions.map((condition) => (
-              <option key={condition.label} value={condition.value}>
-                {condition.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </section>
+            <X className="h-4 w-4" />
+          </button>
+        ) : null}
+      </div>
 
+      {/* Filter chips */}
+      <div className="space-y-3">
+        {/* Condition */}
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+            Condición
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {conditionChips.map((chip) => (
+              <Chip
+                key={chip.value}
+                active={conditionFilter === chip.value}
+                onClick={() => setConditionFilter(chip.value)}
+              >
+                {chip.label}
+              </Chip>
+            ))}
+          </div>
+        </div>
+
+        {/* Price */}
+        <div className="flex items-center gap-2">
+          <span className="shrink-0 text-xs font-semibold uppercase tracking-wider text-zinc-400">
+            Precio
+          </span>
+          <div className="flex flex-wrap gap-2">
+            {priceChips.map((chip) => (
+              <Chip
+                key={chip.value}
+                active={priceRange === chip.value}
+                onClick={() => setPriceRange(chip.value)}
+              >
+                {chip.label}
+              </Chip>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Error */}
       {error ? (
-        <p className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700" role="alert">
+        <p
+          className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+          role="alert"
+        >
           {error}
         </p>
       ) : null}
 
-      {!listings ? (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {Array.from({ length: 6 }).map((_, index) => (
-            <div
-              key={index}
-              className="h-48 animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100"
-            />
+      {/* Loading */}
+      {!listings && !error ? (
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <CardSkeleton key={i} />
           ))}
         </div>
-      ) : filteredListings.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-6 py-12 text-center">
-          <h2 className="text-lg font-medium text-zinc-900">No listings yet</h2>
-          <p className="mt-2 text-sm text-zinc-600">
-            {hasFilters
-              ? "Try clearing a filter to see more watches."
-              : "Approved listings will appear here as soon as sellers publish them."}
+      ) : null}
+
+      {/* Results + clear */}
+      {listings ? (
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-zinc-500">
+            {filteredListings.length}{" "}
+            {filteredListings.length === 1 ? "reloj disponible" : "relojes disponibles"}
           </p>
+          {hasFilters ? (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="flex items-center gap-1 text-sm text-zinc-500 hover:text-zinc-900"
+            >
+              <X className="h-3.5 w-3.5" />
+              Limpiar filtros
+            </button>
+          ) : null}
         </div>
-      ) : (
-        <section className="space-y-3">
-          <p className="text-sm text-zinc-600">
-            {filteredListings.length} listing{filteredListings.length === 1 ? "" : "s"} available
+      ) : null}
+
+      {/* Empty state */}
+      {listings && filteredListings.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-6 py-16 text-center">
+          <p className="text-lg font-semibold text-zinc-900">
+            {hasFilters ? "Sin resultados" : "Todavía no hay listings"}
           </p>
-          <ul className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {filteredListings.map((listing) => {
-              const primaryImage = listing.images[0]?.url;
+          <p className="mt-2 text-sm text-zinc-500">
+            {hasFilters
+              ? "Probá eliminando algún filtro para ver más relojes."
+              : "Los listings aprobados aparecerán acá cuando los vendedores los publiquen."}
+          </p>
+          {hasFilters ? (
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="mt-4 rounded-full border border-zinc-300 px-4 py-2 text-sm text-zinc-700 hover:border-zinc-500 hover:bg-zinc-50"
+            >
+              Limpiar filtros
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
-              return (
-                <li key={listing.id}>
-                  <Link href={`/listings/${listing.id}`} className="block h-full">
-                    <Card
-                      className={cn(
-                        "h-full overflow-hidden rounded-2xl border-zinc-200 transition hover:-translate-y-0.5 hover:border-zinc-400 hover:shadow-md focus-within:ring-2 focus-within:ring-zinc-400",
-                      )}
-                    >
-                      <div className="relative flex aspect-[4/3] items-center justify-center bg-zinc-100">
-                        {primaryImage ? (
-                          <Image
-                            src={primaryImage}
-                            alt={listing.title}
-                            fill
-                            unoptimized
-                            sizes="(min-width: 1280px) 33vw, (min-width: 768px) 50vw, 100vw"
-                            className="object-cover"
-                          />
-                        ) : (
-                          <span className="text-sm text-zinc-500">No photo</span>
-                        )}
-                      </div>
-                      <CardContent className="space-y-4 p-5">
-                        <div className="space-y-2">
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
-                            <Badge variant="outline">{listing.model.brand.name}</Badge>
-                            <Badge variant="outline">
-                              {getConditionLabel(listing.condition)}
-                            </Badge>
-                          </div>
-                          <div className="space-y-1">
-                            <h2 className="text-lg font-semibold text-zinc-900">
-                              {listing.title}
-                            </h2>
-                            <p className="text-2xl font-semibold text-zinc-900">
-                              {formatMoney(listing.price, listing.currency)}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex flex-wrap gap-2 text-xs text-zinc-600">
-                          <span className="rounded-full bg-zinc-100 px-2.5 py-1">
-                            {listing.hasBox ? "Box included" : "No box"}
-                          </span>
-                          <span className="rounded-full bg-zinc-100 px-2.5 py-1">
-                            {listing.hasPapers ? "Papers included" : "No papers"}
-                          </span>
-                        </div>
-
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-zinc-600">View listing</span>
-                          <span className="font-medium text-zinc-900">Open</span>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
+      {/* Grid */}
+      {listings && filteredListings.length > 0 ? (
+        <ul className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {filteredListings.map((listing) => (
+            <li key={listing.id}>
+              <ListingCard listing={listing} />
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </main>
   );
 }

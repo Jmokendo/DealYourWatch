@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,22 +14,19 @@ export default function LoginPage() {
     e.preventDefault();
     setError("");
 
-    const res = await fetch("/api/login", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, password }),
+    const res = await signIn("credentials", {
+      email,
+      password,
+      redirect: false,
     });
 
-    const data = await res.json();
-
-    if (!res.ok) {
-      setError(data.error || "Error al iniciar sesión");
+    if (res?.error) {
+      setError("Email o contraseña inválidos");
       return;
     }
 
     router.push("/listings");
+    router.refresh();
   }
 
   return (
@@ -54,7 +52,7 @@ export default function LoginPage() {
           className="border p-2"
         />
 
-        {error && <p className="text-red-500 text-sm">{error}</p>}
+        {error ? <p className="text-red-500 text-sm">{error}</p> : null}
 
         <button className="bg-black text-white p-2">Entrar</button>
 

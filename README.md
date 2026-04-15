@@ -31,6 +31,36 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 
 ## Deploy on Vercel
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Set these environment variables in Vercel before deploying:
+
+```bash
+DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE?sslmode=require"
+AUTH_SECRET="replace-with-a-strong-random-secret"
+CLOUDINARY_CLOUD_NAME=""
+CLOUDINARY_API_KEY=""
+CLOUDINARY_API_SECRET=""
+```
+
+Optional variables:
+
+```bash
+CLOUDINARY_UPLOAD_PRESET=""
+GOOGLE_CLIENT_ID=""
+GOOGLE_CLIENT_SECRET=""
+```
+
+Do not set `USE_API_MOCK` in production. It is only for local development without Postgres.
+
+Run database migrations before or during release:
+
+```bash
+npm run db:migrate:deploy
+```
+
+The Vercel build command can remain:
+
+```bash
+npm run build
+```
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.

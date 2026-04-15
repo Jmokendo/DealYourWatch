@@ -16,6 +16,7 @@ const negotiationStatusLabels: Record<NegotiationStatus, string> = {
   ACTIVE: "Active",
   ACCEPTED: "Accepted",
   REJECTED: "Rejected",
+  CANCELLED: "Cancelled",
   EXPIRED: "Expired",
 };
 
@@ -23,6 +24,7 @@ const offerStatusLabels: Record<OfferStatus, string> = {
   PENDING: "Pending",
   ACCEPTED: "Accepted",
   REJECTED: "Rejected",
+  WITHDRAWN: "Withdrawn",
   COUNTERED: "Countered",
 };
 

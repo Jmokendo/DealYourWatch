@@ -12,7 +12,7 @@ import type {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { DEV_USER } from "@/lib/devUser";
+import { useSession } from "next-auth/react";
 import {
   formatMoney,
   getNegotiationStatusLabel,
@@ -28,6 +28,7 @@ function statusBadgeVariant(status: OfferDto["status"] | NegotiationSummary["sta
 export default function NegotiationPage() {
   const params = useParams();
   const id = typeof params.id === "string" ? params.id : "";
+  const { data: session, status: sessionStatus } = useSession();
 
   const [negotiation, setNegotiation] = useState<NegotiationSummary | null>(null);
   const [listing, setListing] = useState<ListingDetail | null>(null);
@@ -92,7 +93,7 @@ export default function NegotiationPage() {
     void loadAll();
   }, [loadAll]);
 
-  const userId = DEV_USER.id;
+  const userId = session?.user?.id;
   const sellerId = listing?.user.id;
 
   const role = useMemo(() => {
@@ -235,6 +236,19 @@ export default function NegotiationPage() {
           <div className="h-96 animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100" />
           <div className="h-64 animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100" />
         </div>
+      ) : null}
+
+      {sessionStatus === "unauthenticated" && !loading ? (
+        <Card className="rounded-2xl border-zinc-200">
+          <CardContent className="space-y-3 p-5">
+            <p className="text-sm text-zinc-600">
+              Sign in to view this negotiation.
+            </p>
+            <Button type="button" asChild>
+              <Link href="/login">Sign in</Link>
+            </Button>
+          </CardContent>
+        </Card>
       ) : null}
 
       {negotiation && listing ? (

@@ -48,9 +48,12 @@ export const API_CONTRACT_VERSION = "1" as const;
 export type Condition = "NEW" | "MINT" | "EXCELLENT" | "GOOD" | "FAIR";
 
 export type ListingStatus =
+  | "ACTIVE"
+  | "PAUSED"
+  | "SOLD"
+  | "DELETED"
   | "PENDING"
   | "APPROVED"
-  | "SOLD"
   | "REJECTED"
   | "EXPIRED";
 
@@ -58,9 +61,10 @@ export type NegotiationStatus =
   | "ACTIVE"
   | "ACCEPTED"
   | "REJECTED"
+  | "CANCELLED"
   | "EXPIRED";
 
-export type OfferStatus = "PENDING" | "ACCEPTED" | "REJECTED" | "COUNTERED";
+export type OfferStatus = "PENDING" | "ACCEPTED" | "REJECTED" | "WITHDRAWN" | "COUNTERED";
 
 export interface BrandSummary {
   id: string;
@@ -153,6 +157,19 @@ export interface PatchListingBody {
 
 export interface UploadResponse {
   url: string;
+  publicId?: string;
+}
+
+export interface UploadSignatureResponse {
+  cloudName: string;
+  apiKey: string;
+  timestamp: number;
+  signature: string;
+  folder: string;
+  publicId: string;
+  uploadPreset?: string;
+  allowedMimeTypes: string[];
+  maxFileSize: number;
 }
 
 export interface NegotiationSummary {

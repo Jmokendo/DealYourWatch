@@ -1,7 +1,11 @@
 import { SellForm } from "@/app/sell/SellForm";
-import { DEV_USER } from "@/lib/devUser";
+import { requireAuthUser } from "@/lib/auth-session";
+import { redirect } from "next/navigation";
 
 export default async function SellPage() {
-  const label = DEV_USER.name ?? DEV_USER.email ?? "your account";
+  const user = await requireAuthUser();
+  if (!user) redirect("/login");
+
+  const label = user.name ?? user.email;
   return <SellForm signedInLabel={label} />;
 }

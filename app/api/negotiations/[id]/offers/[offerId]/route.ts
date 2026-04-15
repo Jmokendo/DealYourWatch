@@ -13,7 +13,7 @@ import {
   loadNegotiationWithSeller,
   mockListingSellerId,
 } from "@/lib/api/negotiation-access";
-import { getUserIdFromCookie } from "@/lib/getUser";
+import { requireAuthUser } from "@/lib/auth-session";
 
 type ApiError = Error & { statusCode: number };
 
@@ -58,7 +58,8 @@ export async function PATCH(
   req: Request,
   ctx: { params: Promise<{ id: string; offerId: string }> },
 ) {
-  const userId = (await getUserIdFromCookie()) || "dev-user-1";
+  const user = await requireAuthUser();
+  if (!user) return jsonError("Unauthorized", 401);
 
   const { id: negotiationId, offerId } = await ctx.params;
 
@@ -97,7 +98,7 @@ export async function PATCH(
     const listing = mockListings.find((l) => l.id === neg.listingId);
     if (!listing) return jsonError("Listing not found", 404);
     if (
-      !isNegotiationParticipant(userId, neg.buyerId, sellerId)
+      !isNegotiationParticipant(user.id, neg.buyerId, sellerId)
     ) {
       return jsonError("Forbidden", 403);
     }
@@ -115,7 +116,7 @@ export async function PATCH(
     if (offer.status !== "PENDING") {
       return jsonError("Offer is not pending", 409);
     }
-    if (offer.userId === userId) {
+    if (offer.userId === user.id) {
       return jsonError("Cannot respond to your own offer", 403);
     }
 
@@ -149,7 +150,7 @@ export async function PATCH(
       const counter: OfferDto = {
         id: `mock-offer-${Date.now()}`,
         negotiationId,
-        userId,
+        userId: user.id,
         amount: (body.amount as number).toFixed(2),
         currency: body.currency ?? "USD",
         reasonType: "COUNTER",
@@ -171,7 +172,7 @@ export async function PATCH(
   if (!neg) return jsonError("Negotiation not found", 404);
 
   const sellerId = neg.listing.userId;
-  if (!isNegotiationParticipant(userId, neg.buyerId, sellerId)) {
+  if (!isNegotiationParticipant(user.id, neg.buyerId, sellerId)) {
     return jsonError("Forbidden", 403);
   }
   if (neg.listing.status === "SOLD") {
@@ -188,7 +189,7 @@ export async function PATCH(
   if (existing.status !== "PENDING") {
     return jsonError("Offer is not pending", 409);
   }
-  if (existing.userId === userId) {
+  if (existing.userId === user.id) {
     return jsonError("Cannot respond to your own offer", 403);
   }
 
@@ -290,27 +291,34 @@ export async function PATCH(
 
   if (body.action === "reject") {
     const [updatedOffer] = await db.$transaction([
-      db.offer.update({
-        where: { id: offerId },
+      db.offer.updateMany({
+        where: { id: offerId, negotiationId, status: "PENDING" },
         data: { status: "REJECTED" },
       }),
-      db.negotiation.update({
-        where: { id: negotiationId },
+      db.negotiation.updateMany({
+        where: { id: negotiationId, status: "ACTIVE" },
         data: { status: "REJECTED" },
       }),
     ]);
-    return jsonOk({ offer: toOfferDto(updatedOffer) });
+    if (updatedOffer.count !== 1) {
+      return jsonError("Offer is not pending", 409);
+    }
+    const offer = await db.offer.findUniqueOrThrow({ where: { id: offerId } });
+    return jsonOk({ offer: toOfferDto(offer) });
   }
 
   const counter = await db.$transaction(async (tx) => {
-    await tx.offer.update({
-      where: { id: offerId },
+    const offerUpdated = await tx.offer.updateMany({
+      where: { id: offerId, negotiationId, status: "PENDING" },
       data: { status: "COUNTERED" },
     });
+    if (offerUpdated.count !== 1) {
+      throw apiError("Offer is not pending", 409);
+    }
     const newOffer = await tx.offer.create({
       data: {
         negotiationId,
-        userId,
+        userId: user.id,
         amount: body.amount as number,
         currency: body.currency ?? "USD",
         reasonType: "COUNTER",
@@ -318,10 +326,13 @@ export async function PATCH(
         status: "PENDING",
       },
     });
-    await tx.negotiation.update({
-      where: { id: negotiationId },
+    const negUpdated = await tx.negotiation.updateMany({
+      where: { id: negotiationId, status: "ACTIVE" },
       data: { round: { increment: 1 } },
     });
+    if (negUpdated.count !== 1) {
+      throw apiError("Negotiation is not active", 409);
+    }
     return newOffer;
   });
 

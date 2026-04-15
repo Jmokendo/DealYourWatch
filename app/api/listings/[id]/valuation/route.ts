@@ -3,7 +3,7 @@ import { getPrisma } from "@/lib/prisma";
 import { jsonError, jsonOk } from "@/lib/api/http";
 import { mockListings, mockValuations } from "@/lib/api/mock-data";
 import type { ValuationDto, ValuationJobAccepted } from "@/lib/api/contracts";
-import { getUserIdFromCookie } from "@/lib/getUser";
+import { requireAuthUser } from "@/lib/auth-session";
 
 function toValuationDto(row: {
   id: string;
@@ -57,7 +57,8 @@ export async function POST(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const userId = (await getUserIdFromCookie()) || "dev-user-1";
+  const user = await requireAuthUser();
+  if (!user) return jsonError("Unauthorized", 401);
 
   const { id } = await ctx.params;
 
@@ -69,7 +70,7 @@ export async function POST(
   if (isApiMockMode()) {
     const listing = mockListings.find((l) => l.id === id);
     if (!listing) return jsonError("Listing not found", 404);
-    if (listing.user.id !== userId) return jsonError("Forbidden", 403);
+    if (listing.user.id !== user.id) return jsonError("Forbidden", 403);
     return jsonOk(accepted, { status: 202 });
   }
 
@@ -78,7 +79,7 @@ export async function POST(
 
   const listing = await db.listing.findUnique({ where: { id } });
   if (!listing) return jsonError("Listing not found", 404);
-  if (listing.userId !== userId) return jsonError("Forbidden", 403);
+  if (listing.userId !== user.id) return jsonError("Forbidden", 403);
 
   return jsonOk(accepted, { status: 202 });
 }

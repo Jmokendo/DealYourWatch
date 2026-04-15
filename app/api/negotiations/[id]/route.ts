@@ -1,71 +1,85 @@
-import { isApiMockMode } from "@/lib/env";
 import { getPrisma } from "@/lib/prisma";
-import { jsonError, jsonOk } from "@/lib/api/http";
-import { mockNegotiationById } from "@/lib/api/mock-data";
-import type { NegotiationSummary } from "@/lib/api/contracts";
-import {
-  isNegotiationParticipant,
-  mockListingSellerId,
-} from "@/lib/api/negotiation-access";
-import { getUserIdFromCookie } from "@/lib/getUser";
+import { ok, notFound, serverError } from "@/lib/api";
 
-function toSummary(
-  n: {
-    id: string;
-    listingId: string;
-    buyerId: string;
-    status: NegotiationSummary["status"];
-    round: number;
-    expiresAt: Date;
-    createdAt: Date;
-    updatedAt: Date;
-  },
-  threadId: string | null,
-): NegotiationSummary {
-  return {
-    id: n.id,
-    listingId: n.listingId,
-    buyerId: n.buyerId,
-    threadId,
-    status: n.status,
-    round: n.round,
-    expiresAt: n.expiresAt.toISOString(),
-    createdAt: n.createdAt.toISOString(),
-    updatedAt: n.updatedAt.toISOString(),
-  };
-}
-
+// ---------------------------------------------------------------------------
+// GET /api/negotiations/[id]
+// Full detail: listing summary + buyer + seller + all offers ordered by createdAt
+// ---------------------------------------------------------------------------
 export async function GET(
   _req: Request,
-  ctx: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const userId = (await getUserIdFromCookie()) || "dev-user-1";
-
-  const { id } = await ctx.params;
-
-  if (isApiMockMode()) {
-    const found = mockNegotiationById[id];
-    if (!found) return jsonError("Negotiation not found", 404);
-    const sellerId = mockListingSellerId(found.listingId);
-    if (!sellerId) return jsonError("Listing not found", 404);
-    if (!isNegotiationParticipant(userId, found.buyerId, sellerId)) {
-      return jsonError("Forbidden", 403);
-    }
-    return jsonOk(found);
-  }
-
   const db = getPrisma();
-  if (!db) return jsonError("Database not configured", 503);
+  if (!db) return serverError("Database not configured");
 
-  const row = await db.negotiation.findUnique({
-    where: { id },
-    include: { thread: true, listing: { select: { userId: true } } },
-  });
-  if (!row) return jsonError("Negotiation not found", 404);
-  if (
-    !isNegotiationParticipant(userId, row.buyerId, row.listing.userId)
-  ) {
-    return jsonError("Forbidden", 403);
+  const { id } = await params;
+
+  try {
+    const neg = await db.negotiation.findUnique({
+      where: { id },
+      include: {
+        listing: {
+          include: {
+            model: { include: { brand: true } },
+            user: { select: { id: true, name: true, email: true } },
+            images: { orderBy: { order: "asc" }, take: 1 },
+          },
+        },
+        offers: { orderBy: { createdAt: "asc" } },
+        thread: { select: { id: true } },
+      },
+    });
+
+    if (!neg) return notFound("Negociación");
+
+    // Resolve buyer
+    const buyer = await db.user.findUnique({
+      where: { id: neg.buyerId },
+      select: { id: true, name: true, email: true },
+    });
+
+    return ok({
+      id: neg.id,
+      status: neg.status,
+      round: neg.round,
+      expiresAt: neg.expiresAt.toISOString(),
+      createdAt: neg.createdAt.toISOString(),
+      updatedAt: neg.updatedAt.toISOString(),
+      threadId: neg.thread?.id ?? null,
+      listing: {
+        id: neg.listing.id,
+        title: neg.listing.title,
+        price: neg.listing.price.toString(),
+        currency: neg.listing.currency,
+        condition: neg.listing.condition,
+        status: neg.listing.status,
+        firstImage: neg.listing.images[0]?.url ?? null,
+        brand: {
+          id: neg.listing.model.brand.id,
+          name: neg.listing.model.brand.name,
+          slug: neg.listing.model.brand.slug,
+        },
+        seller: {
+          id: neg.listing.user.id,
+          name: neg.listing.user.name,
+          email: neg.listing.user.email,
+        },
+      },
+      buyer: buyer
+        ? { id: buyer.id, name: buyer.name, email: buyer.email }
+        : { id: neg.buyerId, name: null, email: null },
+      offers: neg.offers.map((o) => ({
+        id: o.id,
+        userId: o.userId,
+        amount: o.amount.toString(),
+        currency: o.currency,
+        reasonType: o.reasonType,
+        reasonNote: o.reasonNote,
+        status: o.status,
+        createdAt: o.createdAt.toISOString(),
+      })),
+    });
+  } catch (e) {
+    return serverError(e);
   }
-  return jsonOk(toSummary(row, row.thread?.id ?? null));
 }

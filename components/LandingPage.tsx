@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { DEV_USER } from "@/lib/devUser";
+import { useSession } from "next-auth/react";
 import {
   ArrowRight,
   Camera,
@@ -42,7 +42,8 @@ const stagger: Variants = {
 };
 
 function Nav() {
-  const currentUser = DEV_USER;
+  const { data: session } = useSession();
+  const currentUser = session?.user;
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-zinc-200 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/50">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
@@ -71,9 +72,11 @@ function Nav() {
           </a>
         </nav>
         <div className="flex items-center gap-3">
-          <span className="hidden max-w-[10rem] truncate text-sm text-zinc-600 sm:inline">
-            {currentUser.name ?? currentUser.email}
-          </span>
+          {currentUser ? (
+            <span className="hidden max-w-[10rem] truncate text-sm text-zinc-600 sm:inline">
+              {currentUser.name ?? currentUser.email}
+            </span>
+          ) : null}
           <Button
             type="button"
             className="rounded-2xl"
