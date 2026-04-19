@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { cookies } from "next/headers";
 import { getPrisma } from "@/lib/prisma";
 import { jsonError, jsonOk } from "@/lib/api/http";

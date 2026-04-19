@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { jsonError, jsonOk } from "@/lib/api/http";
 import type { UploadResponse } from "@/lib/api/contracts";
 import { getUserIdFromCookie } from "@/lib/getUser";
