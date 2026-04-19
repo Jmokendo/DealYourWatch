@@ -34,7 +34,7 @@
  *
  * QA / failure points (test early)
  * --------------------------------
- * - Missing DATABASE_URL → mocks; toggle USE_API_MOCK to test both paths.
+ * - Missing DATABASE_URL fails fast; set USE_API_MOCK=1 only for explicit mock-mode testing.
  * - Decimal parsing on client (always treat price as string from API).
  * - Listing without images (empty array).
  * - Race: two buyers start negotiation on same listing (no unique constraint by design in MVP).
