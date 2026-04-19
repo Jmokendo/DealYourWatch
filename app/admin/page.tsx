@@ -926,10 +926,10 @@ function DemoToolsView({ toast, onUnauthorized }: { toast: AddToast; onUnauthori
                 </Button>
 
                 {result != null && (
-                  <pre className="overflow-x-auto rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
-                    {JSON.stringify(result, null, 2)}
-                  </pre>
-                )}
+  <pre className="overflow-x-auto rounded-lg border border-zinc-100 bg-zinc-50 p-3 text-xs">
+    {JSON.stringify(result, null, 2)}
+  </pre>
+)}
               </CardContent>
             </Card>
           );
