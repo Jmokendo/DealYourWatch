@@ -1,6 +1,6 @@
 import { isApiMockMode } from "@/lib/env";
 import { getPrisma } from "@/lib/prisma";
-import { jsonOk } from "@/lib/api/http";
+import { jsonError, jsonOk } from "@/lib/api/http";
 import type { BrandSummary } from "@/lib/api/contracts";
 
 const mockBrands: BrandSummary[] = [
@@ -14,15 +14,20 @@ export async function GET() {
     return jsonOk([...mockBrands]);
   }
 
-  const db = getPrisma();
-  if (!db) return jsonOk([...mockBrands]);
+  try {
+    const db = getPrisma();
+    if (!db) return jsonOk([...mockBrands]);
 
-  const rows = await db.brand.findMany({ orderBy: { name: "asc" } });
-  return jsonOk(
-    rows.map((r) => ({
-      id: r.id,
-      name: r.name,
-      slug: r.slug,
-    })),
-  );
+    const rows = await db.brand.findMany({ orderBy: { name: "asc" } });
+    return jsonOk(
+      rows.map((r) => ({
+        id: r.id,
+        name: r.name,
+        slug: r.slug,
+      })),
+    );
+  } catch (error) {
+    console.error("Get brands error:", error);
+    return jsonError("Internal server error", 500);
+  }
 }

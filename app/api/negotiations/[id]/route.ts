@@ -2,44 +2,20 @@ import { isApiMockMode } from "@/lib/env";
 import { getPrisma } from "@/lib/prisma";
 import { jsonError, jsonOk } from "@/lib/api/http";
 import { mockNegotiationById } from "@/lib/api/mock-data";
-import type { NegotiationSummary } from "@/lib/api/contracts";
 import {
   isNegotiationParticipant,
   mockListingSellerId,
 } from "@/lib/api/negotiation-access";
-import { getUserIdFromCookie } from "@/lib/getUser";
-
-function toSummary(
-  n: {
-    id: string;
-    listingId: string;
-    buyerId: string;
-    status: NegotiationSummary["status"];
-    round: number;
-    expiresAt: Date;
-    createdAt: Date;
-    updatedAt: Date;
-  },
-  threadId: string | null,
-): NegotiationSummary {
-  return {
-    id: n.id,
-    listingId: n.listingId,
-    buyerId: n.buyerId,
-    threadId,
-    status: n.status,
-    round: n.round,
-    expiresAt: n.expiresAt.toISOString(),
-    createdAt: n.createdAt.toISOString(),
-    updatedAt: n.updatedAt.toISOString(),
-  };
-}
+import { toNegotiationSummary } from "@/lib/api/negotiations";
+import { auth } from "@/lib/auth";
 
 export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const userId = (await getUserIdFromCookie()) || "dev-user-1";
+  const session = await auth();
+  if (!session) return jsonError("Unauthorized", 401);
+  const userId = session.user.id;
 
   const { id } = await ctx.params;
 
@@ -54,18 +30,23 @@ export async function GET(
     return jsonOk(found);
   }
 
-  const db = getPrisma();
-  if (!db) return jsonError("Database not configured", 503);
+  try {
+    const db = getPrisma();
+    if (!db) return jsonError("Database not configured", 503);
 
-  const row = await db.negotiation.findUnique({
-    where: { id },
-    include: { thread: true, listing: { select: { userId: true } } },
-  });
-  if (!row) return jsonError("Negotiation not found", 404);
-  if (
-    !isNegotiationParticipant(userId, row.buyerId, row.listing.userId)
-  ) {
-    return jsonError("Forbidden", 403);
+    const row = await db.negotiation.findUnique({
+      where: { id },
+      include: { thread: true, listing: { select: { userId: true } } },
+    });
+    if (!row) return jsonError("Negotiation not found", 404);
+    if (
+      !isNegotiationParticipant(userId, row.buyerId, row.listing.userId)
+    ) {
+      return jsonError("Forbidden", 403);
+    }
+    return jsonOk(toNegotiationSummary(row, row.thread?.id ?? null));
+  } catch (error) {
+    console.error("Get negotiation error:", error);
+    return jsonError("Internal server error", 500);
   }
-  return jsonOk(toSummary(row, row.thread?.id ?? null));
 }

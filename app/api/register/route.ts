@@ -19,21 +19,27 @@ export async function POST(req: Request) {
     return jsonError("password must be at least 8 characters", 400);
   }
 
-  const db = getPrisma();
-  if (!db) return jsonError("Database not configured", 503);
+  try {
+    const db = getPrisma();
+    if (!db) return jsonError("Database not configured", 503);
 
-  const existing = await db.user.findUnique({ where: { email } });
-  if (existing) return jsonError("User already exists", 409);
+    const existing = await db.user.findUnique({ where: { email } });
+    if (existing) return jsonError("User already exists", 409);
 
-  const hashed = await hashPassword(password);
+    const hashed = await hashPassword(password);
 
-  await db.user.create({
-    data: {
-      email,
-      password: hashed,
-    },
-  });
+    await db.user.create({
+      data: {
+        email,
+        password: hashed,
+        role: "USER",
+      },
+    });
 
-  return jsonOk({ ok: true }, { status: 201 });
+    return jsonOk({ ok: true }, { status: 201 });
+  } catch (error) {
+    console.error("Register error:", error);
+    return jsonError("Internal server error", 500);
+  }
 }
 

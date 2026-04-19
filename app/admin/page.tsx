@@ -1,18 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   BarChart3,
   CheckCircle2,
+  DollarSign,
   LayoutDashboard,
   List,
   Loader2,
+  MessageSquare,
   RefreshCw,
   ShieldAlert,
   Trash2,
   Users,
+  Wand2,
   XCircle,
 } from "lucide-react";
+import { OffersTab } from "./components/OffersTab";
+import { NegotiationsTab } from "./components/NegotiationsTab";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -56,7 +62,7 @@ interface ToastItem {
   type: "success" | "error";
 }
 
-type Section = "dashboard" | "listings" | "users" | "moderation";
+type Section = "dashboard" | "listings" | "users" | "moderation" | "offers" | "negotiations" | "demo";
 type AddToast = (message: string, type: "success" | "error") => void;
 
 // ─── Toast system ─────────────────────────────────────────────────────────────
@@ -192,6 +198,17 @@ function formatDate(iso: string) {
   }).format(new Date(iso));
 }
 
+function formatRelativeTime(iso: string) {
+  const deltaMs = Date.now() - new Date(iso).getTime();
+  const minutes = Math.floor(deltaMs / 60000);
+  const hours = Math.floor(deltaMs / 3600000);
+  const days = Math.floor(deltaMs / 86400000);
+
+  if (days > 0) return `${days}d ago`;
+  if (hours > 0) return `${hours}h ago`;
+  return `${Math.max(minutes, 1)}m ago`;
+}
+
 function TableSkeletonRows({ cols = 6, rows = 5 }: { cols?: number; rows?: number }) {
   return (
     <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
@@ -314,11 +331,17 @@ function ListingsView({
   onUnauthorized: () => void;
   toast: AddToast;
 }) {
+  const router = useRouter();
   const [listings, setListings] = useState<AdminListing[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [pendingDelete, setPendingDelete] = useState<AdminListing | null>(null);
+  const [activeStatus, setActiveStatus] = useState<ListingStatus | "ALL">(
+    filterStatus ?? "ALL",
+  );
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   // Snapshot held in a ref so it never triggers re-renders.
   const snapshotRef = useRef<AdminListing[] | null>(null);
 
@@ -326,9 +349,10 @@ function ListingsView({
     setLoading(true);
     setError(null);
     try {
-      const url = filterStatus
-        ? `/api/admin/listings?status=${filterStatus}`
-        : "/api/admin/listings";
+      const url =
+        activeStatus && activeStatus !== "ALL"
+          ? `/api/admin/listings?status=${activeStatus}`
+          : "/api/admin/listings";
       const res = await fetch(url);
       if (res.status === 401 || res.status === 403) {
         onUnauthorized();
@@ -339,12 +363,17 @@ function ListingsView({
         return;
       }
       setListings((await res.json()) as AdminListing[]);
+      setSelectedIds([]);
     } catch {
       setError("Failed to load listings.");
     } finally {
       setLoading(false);
     }
-  }, [filterStatus, onUnauthorized]);
+  }, [activeStatus, onUnauthorized]);
+
+  useEffect(() => {
+    setActiveStatus(filterStatus ?? "ALL");
+  }, [filterStatus]);
 
   useEffect(() => {
     void load();
@@ -395,6 +424,18 @@ function ListingsView({
     }
   };
 
+  const bulkApprove = async () => {
+    if (!listings || selectedIds.length === 0) return;
+    setBulkBusy(true);
+    const selected = listings.filter((listing) => selectedIds.includes(listing.id));
+    for (const listing of selected) {
+      // eslint-disable-next-line no-await-in-loop
+      await patchStatus(listing, "APPROVED");
+    }
+    setBulkBusy(false);
+    setSelectedIds([]);
+  };
+
   const openDeleteModal = (listing: AdminListing) => {
     snapshotRef.current = listings;
     setPendingDelete(listing);
@@ -427,6 +468,11 @@ function ListingsView({
     }
   };
 
+  const allSelected = !!listings && selectedIds.length === listings.length;
+  const count = listings?.length ?? 0;
+  const title = filterStatus === "PENDING" ? "Listings pendientes de revisión" : "Listings";
+  const statuses: Array<ListingStatus | "ALL"> = ["ALL", "PENDING", "APPROVED", "REJECTED"];
+
   return (
     <>
       {pendingDelete && (
@@ -440,10 +486,55 @@ function ListingsView({
       )}
 
       <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <Button variant="outline" size="sm" onClick={() => void load()}>
-            <RefreshCw className="mr-2 h-4 w-4" /> Refresh
-          </Button>
+        <div className="grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <h2 className="text-lg font-semibold tracking-tight text-zinc-900">
+                {title}
+              </h2>
+              <Badge className="rounded-full px-2.5 py-1 text-xs text-zinc-700">
+                {count}
+              </Badge>
+            </div>
+            <p className="max-w-2xl text-sm text-zinc-500">
+              Review listings faster with a visual queue, quick actions, and bulk approval.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" size="sm" onClick={() => void load()}>
+              <RefreshCw className="mr-2 h-4 w-4" /> Refresh
+            </Button>
+            {activeStatus === "PENDING" && (
+              <Button
+                variant="default"
+                size="sm"
+                disabled={selectedIds.length === 0 || bulkBusy}
+                onClick={() => void bulkApprove()}
+                className="bg-emerald-900 text-white hover:bg-emerald-800"
+              >
+                {bulkBusy ? "Processing..." : `Approve selected (${selectedIds.length})`}
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          {statuses.map((status) => (
+            <button
+              key={status}
+              type="button"
+              onClick={() => setActiveStatus(status)}
+              className={cn(
+                "rounded-full px-4 py-2 text-sm transition",
+                activeStatus === status
+                  ? "bg-zinc-950 text-white"
+                  : "bg-zinc-100 text-zinc-700 hover:bg-zinc-200",
+              )}
+            >
+              {status === "ALL" ? "All" : status.toLowerCase()}
+            </button>
+          ))}
         </div>
 
         {loading ? (
@@ -456,128 +547,155 @@ function ListingsView({
           <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-zinc-300 bg-zinc-50 px-6 py-14 text-center">
             <List className="h-8 w-8 text-zinc-300" />
             <div>
-              <p className="text-sm font-medium text-zinc-600">
-                No listings found
-              </p>
+              <p className="text-sm font-medium text-zinc-600">No listings found</p>
               <p className="mt-0.5 text-xs text-zinc-400">
-                {filterStatus
-                  ? `No listings with status "${filterStatus.toLowerCase()}".`
+                {activeStatus !== "ALL"
+                  ? `No listings with status "${activeStatus.toLowerCase()}".`
                   : "No listings have been created yet."}
               </p>
             </div>
           </div>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-zinc-200 bg-white">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-zinc-200 bg-zinc-50 text-left">
-                  <th className="px-4 py-3 font-medium text-zinc-500">Title</th>
-                  <th className="px-4 py-3 font-medium text-zinc-500">Price</th>
-                  <th className="px-4 py-3 font-medium text-zinc-500">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 font-medium text-zinc-500">Owner</th>
-                  <th className="px-4 py-3 font-medium text-zinc-500">
-                    Created
-                  </th>
-                  <th className="px-4 py-3 font-medium text-zinc-500">
-                    Actions
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100">
-                {listings.map((l) => {
-                  const isBusy = busy === l.id;
-                  return (
-                    <tr
-                      key={l.id}
-                      className={cn(
-                        "transition-colors hover:bg-zinc-50",
-                        isBusy && "opacity-60",
-                      )}
-                    >
-                      <td className="max-w-48 px-4 py-3">
-                        <span
-                          className="block truncate font-medium text-zinc-900"
-                          title={l.title}
-                        >
-                          {l.title}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-700">
-                        {formatMoney(l.price, l.currency)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <StatusBadge status={l.status} />
-                      </td>
-                      <td className="max-w-44 px-4 py-3">
-                        <span
-                          className="block truncate text-zinc-600"
-                          title={l.owner.email}
-                        >
-                          {l.owner.email}
-                        </span>
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-zinc-500">
-                        {formatDate(l.createdAt)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1">
-                          {l.status === "PENDING" && (
-                            <>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={isBusy}
-                                onClick={() => void patchStatus(l, "APPROVED")}
-                                className="h-7 border-green-200 px-2 text-green-700 hover:bg-green-50 hover:text-green-800"
-                                title="Approve"
-                              >
-                                {isBusy ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <CheckCircle2 className="h-3.5 w-3.5" />
-                                )}
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={isBusy}
-                                onClick={() => void patchStatus(l, "REJECTED")}
-                                className="h-7 border-red-200 px-2 text-red-600 hover:bg-red-50 hover:text-red-700"
-                                title="Reject"
-                              >
-                                {isBusy ? (
-                                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                ) : (
-                                  <XCircle className="h-3.5 w-3.5" />
-                                )}
-                              </Button>
-                            </>
-                          )}
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            disabled={isBusy}
-                            onClick={() => openDeleteModal(l)}
-                            className="h-7 px-2 text-zinc-400 hover:bg-red-50 hover:text-red-600"
-                            title="Delete"
-                          >
-                            {isBusy ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-3.5 w-3.5" />
-                            )}
-                          </Button>
+          <div className="space-y-4">
+            <div className="flex items-center justify-between gap-3 rounded-[14px] border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm text-zinc-600">
+              <div className="flex items-center gap-3">
+                <label className="inline-flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+                    checked={allSelected}
+                    onChange={(event) => {
+                      if (event.target.checked) {
+                        setSelectedIds(listings.map((item) => item.id));
+                      } else {
+                        setSelectedIds([]);
+                      }
+                    }}
+                  />
+                  Select all
+                </label>
+                {selectedIds.length > 0 && (
+                  <span>{selectedIds.length} selected</span>
+                )}
+              </div>
+              <span className="text-xs text-zinc-500">Hover a row for fast actions</span>
+            </div>
+
+            <div className="space-y-3">
+              {listings.map((l) => {
+                const isBusy = busy === l.id;
+                const selected = selectedIds.includes(l.id);
+                const year = new Date(l.createdAt).getFullYear();
+
+                return (
+                  <div
+                    key={l.id}
+                    className={cn(
+                      "group rounded-[18px] border border-zinc-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:border-zinc-300 hover:shadow-md",
+                      selected && "ring-2 ring-zinc-900/10",
+                      isBusy && "opacity-70",
+                    )}
+                    onClick={() => router.push(`/listings/${l.id}`)}
+                  >
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex items-start gap-4 sm:min-w-0 sm:flex-1">
+                        <label className="relative inline-flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            onChange={(event) => {
+                              event.stopPropagation();
+                              setSelectedIds((prev) =>
+                                event.target.checked
+                                  ? [...prev, l.id]
+                                  : prev.filter((id) => id !== l.id),
+                              );
+                            }}
+                            className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-900"
+                            onClick={(event) => event.stopPropagation()}
+                          />
+                        </label>
+                        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-zinc-100 text-sm font-semibold text-zinc-500">
+                          {l.owner.name?.slice(0, 2).toUpperCase() || "LN"}
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            <div className="border-t border-zinc-100 px-4 py-2.5 text-xs text-zinc-400">
-              {listings.length} listing{listings.length === 1 ? "" : "s"}
+                        <div className="min-w-0">
+                          <p className="text-xs uppercase tracking-[0.24em] text-zinc-500">
+                            {l.owner.name ?? l.owner.email}
+                          </p>
+                          <p className="mt-1 truncate text-base font-semibold text-zinc-900">
+                            {l.title}
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2 text-xs text-zinc-500">
+                            <span>{year}</span>
+                            <span>•</span>
+                            <span>{formatRelativeTime(l.createdAt)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-col gap-3 sm:items-end">
+                        <p className="text-lg font-semibold text-zinc-950">
+                          {formatMoney(l.price, l.currency)}
+                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <StatusBadge status={l.status} />
+                          {l.status === "PENDING" && (
+                            <span className="rounded-full bg-emerald-50 px-2 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-emerald-700">
+                              Needs review
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-100 pt-3">
+                      <div className="text-xs text-zinc-500">
+                        Review in seconds: approve or inspect the public detail page.
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {l.status === "PENDING" && (
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void patchStatus(l, "APPROVED");
+                            }}
+                            disabled={isBusy}
+                            className="bg-emerald-900 text-white hover:bg-emerald-800"
+                          >
+                            {isBusy ? "Approving..." : "Aprobar"}
+                          </Button>
+                        )}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            router.push(`/listings/${l.id}`);
+                          }}
+                          disabled={isBusy}
+                        >
+                          Revisar
+                        </Button>
+                        {l.status === "PENDING" && (
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              void patchStatus(l, "REJECTED");
+                            }}
+                            disabled={isBusy}
+                          >
+                            Rechazar
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
@@ -696,6 +814,137 @@ function UsersView({ onUnauthorized }: { onUnauthorized: () => void }) {
   );
 }
 
+// ─── Demo tools view ─────────────────────────────────────────────────────────
+
+type DemoAction = {
+  id: string;
+  label: string;
+  description: string;
+  endpoint: string;
+};
+
+const DEMO_ACTIONS: DemoAction[] = [
+  {
+    id: "all",
+    label: "Generate Demo Marketplace",
+    description: "Creates demo users, listings, and negotiations in one shot.",
+    endpoint: "/api/admin/generate-demo-data",
+  },
+  {
+    id: "users",
+    label: "Generate Users",
+    description: "Upserts 8 demo users (3 sellers + 5 buyers) with test credentials.",
+    endpoint: "/api/admin/generate-users",
+  },
+  {
+    id: "listings",
+    label: "Generate Listings",
+    description: "Creates up to 15 approved listings assigned to demo sellers.",
+    endpoint: "/api/admin/generate-listings",
+  },
+  {
+    id: "negotiations",
+    label: "Generate Negotiations",
+    description: "Creates up to 4 active negotiations with 2 offers each.",
+    endpoint: "/api/admin/generate-negotiations",
+  },
+];
+
+function DemoToolsView({ toast, onUnauthorized }: { toast: AddToast; onUnauthorized: () => void }) {
+  const [loadingId, setLoadingId] = useState<string | null>(null);
+  const [results, setResults] = useState<Record<string, unknown>>({});
+
+  const run = async (action: DemoAction) => {
+    setLoadingId(action.id);
+    try {
+      const res = await fetch(action.endpoint, { method: "POST" });
+      if (res.status === 401 || res.status === 403) {
+        onUnauthorized();
+        return;
+      }
+      const data = (await res.json()) as unknown;
+      if (!res.ok) {
+        const msg = typeof data === "object" && data !== null && "error" in data
+          ? String((data as Record<string, unknown>).error)
+          : "Request failed";
+        toast(msg, "error");
+        return;
+      }
+      setResults((prev) => ({ ...prev, [action.id]: data }));
+      toast(`${action.label} — done!`, "success");
+    } catch {
+      toast("Something went wrong", "error");
+    } finally {
+      setLoadingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight text-zinc-900">Demo Data Tools</h2>
+        <p className="mt-1 text-sm text-zinc-500">
+          Generate realistic marketplace data for testing. Operations are idempotent — safe to run multiple times.
+        </p>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        {DEMO_ACTIONS.map((action) => {
+          const isLoading = loadingId === action.id;
+          const result = results[action.id];
+
+          return (
+            <Card key={action.id} className={cn(action.id === "all" && "sm:col-span-2")}>
+              <CardHeader className="pb-2 pt-5">
+                <p className="text-sm font-semibold text-zinc-900">{action.label}</p>
+                <p className="text-xs text-zinc-500">{action.description}</p>
+              </CardHeader>
+              <CardContent className="space-y-3 pb-5">
+                <Button
+                  size="sm"
+                  disabled={isLoading || loadingId !== null}
+                  onClick={() => void run(action)}
+                  className={cn(
+                    action.id === "all"
+                      ? "bg-zinc-900 text-white hover:bg-zinc-800"
+                      : "bg-white text-zinc-900 hover:bg-zinc-50",
+                    "border border-zinc-200",
+                  )}
+                  variant={action.id === "all" ? "default" : "outline"}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                      Running…
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="mr-2 h-3.5 w-3.5" />
+                      {action.label}
+                    </>
+                  )}
+                </Button>
+
+                {result && (
+                  <pre className="overflow-x-auto rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
+                    {JSON.stringify(result, null, 2)}
+                  </pre>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+
+      <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        <strong>Note:</strong> Demo users are created with the password{" "}
+        <code className="rounded bg-amber-100 px-1 font-mono text-xs">demo-password123</code>.
+        Run <em>Generate Demo Marketplace</em> first to ensure correct data dependencies.
+      </div>
+    </div>
+  );
+}
+
 // ─── Nav config ───────────────────────────────────────────────────────────────
 
 const NAV_ITEMS: Array<{
@@ -707,6 +956,9 @@ const NAV_ITEMS: Array<{
   { id: "listings", label: "Listings", Icon: List },
   { id: "users", label: "Users", Icon: Users },
   { id: "moderation", label: "Moderation", Icon: ShieldAlert },
+  { id: "offers", label: "Offers", Icon: DollarSign },
+  { id: "negotiations", label: "Negotiations", Icon: MessageSquare },
+  { id: "demo", label: "Demo Tools", Icon: Wand2 },
 ];
 
 const SECTION_TITLES: Record<Section, string> = {
@@ -714,6 +966,9 @@ const SECTION_TITLES: Record<Section, string> = {
   listings: "Listings",
   users: "Users",
   moderation: "Moderation",
+  offers: "Offers",
+  negotiations: "Negotiations",
+  demo: "Demo Tools",
 };
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -801,6 +1056,18 @@ export default function AdminPage() {
                 filterStatus="PENDING"
                 onUnauthorized={() => setUnauthorized(true)}
                 toast={addToast}
+              />
+            )}
+            {section === "offers" && (
+              <OffersTab onUnauthorized={() => setUnauthorized(true)} />
+            )}
+            {section === "negotiations" && (
+              <NegotiationsTab onUnauthorized={() => setUnauthorized(true)} />
+            )}
+            {section === "demo" && (
+              <DemoToolsView
+                toast={addToast}
+                onUnauthorized={() => setUnauthorized(true)}
               />
             )}
           </main>

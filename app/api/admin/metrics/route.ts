@@ -1,10 +1,10 @@
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireSuperAdmin } from "@/lib/admin-auth";
 import { jsonError, jsonOk } from "@/lib/api/http";
 import { getPrisma } from "@/lib/prisma";
 
 export async function GET() {
-  const admin = await requireAdmin();
-  if (!admin) return jsonError("Unauthorized", 401);
+  const auth = await requireSuperAdmin();
+  if ("status" in auth) return jsonError(auth.message, auth.status);
 
   const prisma = getPrisma();
   if (!prisma) {

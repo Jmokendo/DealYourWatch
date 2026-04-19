@@ -1,29 +1,43 @@
 import { getUserIdFromCookie } from "@/lib/getUser";
+import { getPrisma } from "@/lib/prisma";
 
-const DEV_USER_ID = "dev-user-1";
+type AdminAuthResult =
+  | { userId: string }
+  | { status: 401 | 403 | 503; message: string };
 
-/**
- * Returns the authenticated admin userId, or null if not authorized.
- * Non-production: any authenticated user (or the dev bypass) is treated as admin.
- * Production: userId must appear in the ADMIN_USER_IDS env var (comma-separated).
- */
+export async function requireSuperAdmin(): Promise<AdminAuthResult> {
+  const userId = await getUserIdFromCookie();
+  if (!userId) return { status: 401, message: "Unauthorized" };
+
+  const prisma = getPrisma();
+  if (!prisma) return { status: 503, message: "Service unavailable" };
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, isBanned: true },
+  });
+
+  if (!user) return { status: 401, message: "Unauthorized" };
+  if (user.isBanned) return { status: 403, message: "Forbidden" };
+  if (user.role !== "SUPER_ADMIN") return { status: 403, message: "Forbidden" };
+
+  return { userId: user.id };
+}
+
 export async function requireAdmin(): Promise<string | null> {
-  const isProduction = process.env.NODE_ENV === "production";
-
-  if (!isProduction) {
-    const userId = await getUserIdFromCookie();
-    return userId ?? DEV_USER_ID;
-  }
-
   const userId = await getUserIdFromCookie();
   if (!userId) return null;
 
-  const adminIds = (process.env.ADMIN_USER_IDS ?? "")
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const prisma = getPrisma();
+  if (!prisma) return null;
 
-  if (adminIds.length > 0 && !adminIds.includes(userId)) return null;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true, isBanned: true },
+  });
 
-  return userId;
+  if (!user || user.isBanned) return null;
+  if (user.role !== "ADMIN" && user.role !== "SUPER_ADMIN") return null;
+
+  return user.id;
 }

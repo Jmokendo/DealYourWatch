@@ -2,55 +2,28 @@ import { isApiMockMode } from "@/lib/env";
 import { getPrisma } from "@/lib/prisma";
 import { jsonError, jsonOk } from "@/lib/api/http";
 import { mockListings } from "@/lib/api/mock-data";
-import { toListingDetail } from "@/lib/api/serialize-listing";
-import type { ListingDetail, PatchListingBody } from "@/lib/api/contracts";
-import { mockValuations } from "@/lib/api/mock-data";
-import { getUserIdFromCookie } from "@/lib/getUser";
-
-const detailInclude = {
-  images: { orderBy: { order: "asc" as const } },
-  model: { include: { brand: true } },
-  user: true,
-  valuation: true,
-} as const;
+import { toListingSummary } from "@/lib/api/serialize-listing";
+import { getListingDetailById, LISTING_INCLUDE } from "@/lib/api/listings";
+import type { PatchListingBody } from "@/lib/api/contracts";
+import { auth } from "@/lib/auth";
 
 export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
   const { id } = await ctx.params;
-
-  if (isApiMockMode()) {
-    const found = mockListings.find((l) => l.id === id);
-    if (!found) return jsonError("Listing not found", 404);
-    const detail: ListingDetail = {
-      ...found,
-      valuation: mockValuations[id] ?? null,
-    };
-    return jsonOk(detail);
-  }
-
-  const db = getPrisma();
-  if (!db) {
-    const found = mockListings.find((l) => l.id === id);
-    if (!found) return jsonError("Listing not found", 404);
-    return jsonOk({ ...found, valuation: mockValuations[id] ?? null });
-  }
-
-  const row = await db.listing.findUnique({
-    where: { id },
-    include: detailInclude,
-  });
-
-  if (!row) return jsonError("Listing not found", 404);
-  return jsonOk(toListingDetail(row));
+  const listing = await getListingDetailById(id);
+  if (!listing) return jsonError("Listing not found", 404);
+  return jsonOk(listing);
 }
 
 export async function PATCH(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const userId = (await getUserIdFromCookie()) || "dev-user-1";
+  const session = await auth();
+  if (!session) return jsonError("Unauthorized", 401);
+  const userId = session.user.id;
 
   const { id } = await ctx.params;
 
@@ -72,11 +45,7 @@ export async function PATCH(
     if (body.hasBox !== undefined) found.hasBox = body.hasBox;
     if (body.hasPapers !== undefined) found.hasPapers = body.hasPapers;
     found.updatedAt = new Date().toISOString();
-    const detail: ListingDetail = {
-      ...found,
-      valuation: mockValuations[id] ?? null,
-    };
-    return jsonOk(detail);
+    return jsonOk(found);
   }
 
   const db = getPrisma();
@@ -106,9 +75,9 @@ export async function PATCH(
     const row = await db.listing.update({
       where: { id },
       data,
-      include: detailInclude,
+      include: LISTING_INCLUDE,
     });
-    return jsonOk(toListingDetail(row));
+    return jsonOk(toListingSummary(row));
   } catch {
     return jsonError("Listing not found", 404);
   }

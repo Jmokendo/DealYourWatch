@@ -3,7 +3,6 @@ import type {
   NegotiationSummary,
   OfferDto,
   MessageDto,
-  ValuationDto,
 } from "@/lib/api/contracts";
 
 const now = new Date().toISOString();
@@ -78,22 +77,6 @@ export const mockListings: ListingSummary[] = [
     },
   },
 ];
-
-export const mockValuations: Record<string, ValuationDto> = {
-  "mock-listing-1": {
-    id: "mock-val-1",
-    listingId: "mock-listing-1",
-    chrono24Price: "11800.00",
-    mlPrice: "12100.00",
-    localDelta: "2.50",
-    conditionDelta: "1.00",
-    boxPapersDelta: "0.50",
-    notes: "Mock valuation for development.",
-    sources: [],
-    createdAt: now,
-    updatedAt: now,
-  },
-};
 
 export const mockNegotiationsByListing: Record<string, NegotiationSummary[]> = {
   "mock-listing-1": [],

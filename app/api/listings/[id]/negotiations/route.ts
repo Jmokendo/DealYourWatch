@@ -1,85 +1,32 @@
 import { isApiMockMode } from "@/lib/env";
 import { getPrisma } from "@/lib/prisma";
 import { jsonError, jsonOk } from "@/lib/api/http";
-import type {
-  CreateNegotiationBody,
-  NegotiationSummary,
-} from "@/lib/api/contracts";
-import { getUserIdFromCookie } from "@/lib/getUser";
+import type { CreateNegotiationBody, NegotiationStatus, NegotiationSummary } from "@/lib/api/contracts";
+import { auth } from "@/lib/auth";
 import {
   mockListings,
   mockNegotiationById,
   mockNegotiationsByListing,
 } from "@/lib/api/mock-data";
-import { isNegotiationParticipant } from "@/lib/api/negotiation-access";
-
-function toNegotiationSummary(
-  n: {
-    id: string;
-    listingId: string;
-    buyerId: string;
-    status: NegotiationSummary["status"];
-    round: number;
-    expiresAt: Date;
-    createdAt: Date;
-    updatedAt: Date;
-  },
-  threadId: string | null,
-): NegotiationSummary {
-  return {
-    id: n.id,
-    listingId: n.listingId,
-    buyerId: n.buyerId,
-    threadId,
-    status: n.status,
-    round: n.round,
-    expiresAt: n.expiresAt.toISOString(),
-    createdAt: n.createdAt.toISOString(),
-    updatedAt: n.updatedAt.toISOString(),
-  };
-}
+import { getNegotiationsForListing, toNegotiationSummary } from "@/lib/api/negotiations";
 
 export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const userId = (await getUserIdFromCookie()) || "dev-user-1";
-
+  const session = await auth();
+  if (!session) return jsonError("Unauthorized", 401);
   const { id } = await ctx.params;
-
-  if (isApiMockMode()) {
-    const listing = mockListings.find((l) => l.id === id);
-    if (!listing) return jsonError("Listing not found", 404);
-    const list = (mockNegotiationsByListing[id] ?? []).filter((n) =>
-      isNegotiationParticipant(userId, n.buyerId, listing.user.id),
-    );
-    return jsonOk(list.map((n) => ({ ...n })));
-  }
-
-  const db = getPrisma();
-  if (!db) return jsonError("Database not configured", 503);
-
-  const listing = await db.listing.findUnique({ where: { id } });
-  if (!listing) return jsonError("Listing not found", 404);
-
-  const rows = await db.negotiation.findMany({
-    where: {
-      listingId: id,
-      OR: [{ buyerId: userId }, { listing: { userId: userId } }],
-    },
-    orderBy: { createdAt: "desc" },
-    include: { thread: true },
-  });
-  return jsonOk(
-    rows.map((r) => toNegotiationSummary(r, r.thread?.id ?? null)),
-  );
+  return jsonOk(await getNegotiationsForListing(id, session.user.id));
 }
 
 export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const userId = (await getUserIdFromCookie()) || "dev-user-1";
+  const session = await auth();
+  if (!session) return jsonError("Unauthorized", 401);
+  const userId = session.user.id;
 
   const { id } = await ctx.params;
   let raw: unknown;
@@ -167,7 +114,10 @@ export async function POST(
     include: { thread: true },
   });
   return jsonOk(
-    toNegotiationSummary(full, full.thread?.id ?? null),
+    toNegotiationSummary(
+      { ...full, status: full.status as NegotiationStatus },
+      full.thread?.id ?? null,
+    ),
     { status: 201 },
   );
 }

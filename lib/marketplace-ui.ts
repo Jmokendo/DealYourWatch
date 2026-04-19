@@ -15,6 +15,7 @@ const conditionLabels: Record<Condition, string> = {
 const negotiationStatusLabels: Record<NegotiationStatus, string> = {
   ACTIVE: "Active",
   ACCEPTED: "Accepted",
+  CLOSED: "Closed",
   REJECTED: "Rejected",
   EXPIRED: "Expired",
 };

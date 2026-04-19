@@ -1,9 +1,5 @@
-import type { Listing, Valuation } from "@prisma/client";
-import type {
-  ListingDetail,
-  ListingSummary,
-  ValuationDto,
-} from "@/lib/api/contracts";
+import type { Listing } from "@prisma/client";
+import type { ListingSummary } from "@/lib/api/contracts";
 
 type ListingWithRelations = Listing & {
   images: { id: string; url: string; order: number }[];
@@ -20,24 +16,7 @@ type ListingWithRelations = Listing & {
     name: string | null;
     image: string | null;
   };
-  valuation?: Valuation | null;
 };
-
-function toValuationDto(v: Valuation): ValuationDto {
-  return {
-    id: v.id,
-    listingId: v.listingId,
-    chrono24Price: v.chrono24Price?.toString() ?? null,
-    mlPrice: v.mlPrice?.toString() ?? null,
-    localDelta: v.localDelta?.toString() ?? null,
-    conditionDelta: v.conditionDelta?.toString() ?? null,
-    boxPapersDelta: v.boxPapersDelta?.toString() ?? null,
-    notes: v.notes,
-    sources: Array.isArray(v.sources) ? (v.sources as unknown[]) : [],
-    createdAt: v.createdAt.toISOString(),
-    updatedAt: v.updatedAt.toISOString(),
-  };
-}
 
 export function toListingSummary(row: ListingWithRelations): ListingSummary {
   return {
@@ -46,10 +25,10 @@ export function toListingSummary(row: ListingWithRelations): ListingSummary {
     description: row.description,
     price: row.price.toString(),
     currency: row.currency,
-    condition: row.condition,
+    condition: row.condition as ListingSummary["condition"],
     hasBox: row.hasBox,
     hasPapers: row.hasPapers,
-    status: row.status,
+    status: row.status as ListingSummary["status"],
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
     images: row.images.map((i) => ({
@@ -68,9 +47,4 @@ export function toListingSummary(row: ListingWithRelations): ListingSummary {
   };
 }
 
-export function toListingDetail(row: ListingWithRelations): ListingDetail {
-  return {
-    ...toListingSummary(row),
-    valuation: row.valuation ? toValuationDto(row.valuation) : null,
-  };
-}
+export const toListingDetail = toListingSummary;

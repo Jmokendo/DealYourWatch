@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import type {
@@ -12,7 +12,7 @@ import type {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { DEV_USER } from "@/lib/devUser";
+import { LoginCTA } from "@/components/LoginCTA";
 import {
   formatMoney,
   getNegotiationStatusLabel,
@@ -20,14 +20,18 @@ import {
 } from "@/lib/marketplace-ui";
 
 function statusBadgeVariant(status: OfferDto["status"] | NegotiationSummary["status"]) {
-  if (status === "ACCEPTED") return "default";
+  if (status === "ACCEPTED" || status === "CLOSED") return "default";
   if (status === "REJECTED" || status === "EXPIRED") return "destructive";
   return "secondary";
 }
 
 export default function NegotiationPage() {
   const params = useParams();
+  const router = useRouter();
   const id = typeof params.id === "string" ? params.id : "";
+
+  const [userId, setUserId] = useState<string | null>(null);
+  const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
   const [negotiation, setNegotiation] = useState<NegotiationSummary | null>(null);
   const [listing, setListing] = useState<ListingDetail | null>(null);
@@ -42,8 +46,26 @@ export default function NegotiationPage() {
   const [counterAmount, setCounterAmount] = useState("");
   const [counterNote, setCounterNote] = useState("");
 
+  // Load current user
+  useEffect(() => {
+    async function getUser() {
+      try {
+        const res = await fetch("/api/me");
+        if (res.ok) {
+          const data = (await res.json()) as { id: string };
+          setUserId(data.id);
+        }
+      } catch {
+        // Not authenticated
+      } finally {
+        setIsLoadingAuth(false);
+      }
+    }
+    getUser();
+  }, []);
+
   const loadAll = useCallback(async () => {
-    if (!id) return;
+    if (!id || !userId) return;
     setError(null);
     setLoading(true);
     try {
@@ -86,13 +108,14 @@ export default function NegotiationPage() {
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, userId]);
 
   useEffect(() => {
-    void loadAll();
-  }, [loadAll]);
+    if (!isLoadingAuth && userId) {
+      void loadAll();
+    }
+  }, [isLoadingAuth, userId, loadAll]);
 
-  const userId = DEV_USER.id;
   const sellerId = listing?.user.id;
 
   const role = useMemo(() => {
@@ -208,6 +231,33 @@ export default function NegotiationPage() {
     return (
       <main className="mx-auto flex min-h-full max-w-3xl flex-1 flex-col gap-4 px-6 py-16">
         <p className="text-neutral-600">Invalid negotiation.</p>
+      </main>
+    );
+  }
+
+  // Show loading while checking auth
+  if (isLoadingAuth) {
+    return (
+      <main className="mx-auto flex min-h-full max-w-3xl flex-1 flex-col gap-4 px-6 py-16">
+        <div className="h-32 animate-pulse rounded-2xl border border-zinc-200 bg-zinc-100" />
+      </main>
+    );
+  }
+
+  // Not authenticated - show login CTA
+  if (!userId) {
+    return (
+      <main className="mx-auto flex min-h-full max-w-3xl flex-1 flex-col gap-4 px-6 py-16">
+        <Button type="button" variant="ghost" asChild>
+          <Link href="/listings">← Back to listings</Link>
+        </Button>
+        <div className="space-y-4">
+          <h1 className="text-3xl font-semibold tracking-tight">Negotiation</h1>
+          <p className="text-sm text-zinc-600">
+            You need to be logged in to view negotiations.
+          </p>
+          <LoginCTA message="Inicia sesión para acceder a tus negociaciones." buttonText="Ir a login" />
+        </div>
       </main>
     );
   }

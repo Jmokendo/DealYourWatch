@@ -1,71 +1,40 @@
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireSuperAdmin } from "@/lib/admin-auth";
 import { jsonError, jsonOk } from "@/lib/api/http";
 import { getPrisma } from "@/lib/prisma";
+import { VALID_LISTING_STATUSES } from "@/lib/api/contracts";
 import type { ListingStatus } from "@/lib/api/contracts";
-
-const VALID_STATUSES: ListingStatus[] = [
-  "PENDING",
-  "APPROVED",
-  "SOLD",
-  "REJECTED",
-  "EXPIRED",
-];
+import { adminApproveListing } from "@/lib/services/admin-service";
 
 export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const admin = await requireAdmin();
-  if (!admin) return jsonError("Unauthorized", 401);
+  const auth = await requireSuperAdmin();
+  if ("status" in auth) return jsonError(auth.message, auth.status);
 
   const { id } = await params;
-  const prisma = getPrisma();
-  if (!prisma) return jsonError("Service unavailable", 503);
+  const db = getPrisma();
+  if (!db) return jsonError("Service unavailable", 503);
 
   const raw = await request.json().catch(() => null);
   if (!raw || typeof raw !== "object") return jsonError("Invalid body", 400);
 
-  const o = raw as Record<string, unknown>;
-  const status = o.status as ListingStatus | undefined;
-
-  if (!status || !VALID_STATUSES.includes(status)) {
+  const status = (raw as Record<string, unknown>).status as ListingStatus | undefined;
+  if (!status || !VALID_LISTING_STATUSES.includes(status)) {
     return jsonError("Invalid or missing status", 400);
   }
 
-  const listing = await prisma.listing.findUnique({ where: { id } });
-  if (!listing) return jsonError("Not found", 404);
-
-  const updated = await prisma.listing.update({
-    where: { id },
-    data: { status },
-    select: {
-      id: true,
-      title: true,
-      price: true,
-      currency: true,
-      status: true,
-      createdAt: true,
-      user: { select: { id: true, email: true, name: true } },
-    },
-  });
-
-  return jsonOk({
-    id: updated.id,
-    title: updated.title,
-    price: updated.price.toString(),
-    currency: updated.currency,
-    status: updated.status,
-    owner: updated.user,
-    createdAt: updated.createdAt.toISOString(),
-  });
+  const result = await adminApproveListing(db, id, status);
+  if (!result.ok) return jsonError(result.error, result.status);
+  return jsonOk(result.data);
 }
 
 export async function DELETE(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const admin = await requireAdmin();
-  if (!admin) return jsonError("Unauthorized", 401);
+  const auth = await requireSuperAdmin();
+  if ("status" in auth) return jsonError(auth.message, auth.status);
 
   const { id } = await params;
   const prisma = getPrisma();
@@ -86,7 +55,6 @@ export async function DELETE(
     .map((n) => n.thread?.id)
     .filter((tid): tid is string => tid != null);
 
-  // Delete in dependency order; ListingImage cascades automatically.
   await prisma.$transaction([
     prisma.message.deleteMany({ where: { threadId: { in: threadIds } } }),
     prisma.thread.deleteMany({ where: { id: { in: threadIds } } }),

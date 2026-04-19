@@ -2,7 +2,7 @@ import { isApiMockMode } from "@/lib/env";
 import { getPrisma } from "@/lib/prisma";
 import { jsonError, jsonOk } from "@/lib/api/http";
 import type { CreateOfferBody, OfferDto } from "@/lib/api/contracts";
-import { getUserIdFromCookie } from "@/lib/getUser";
+import { auth } from "@/lib/auth";
 import {
   mockListings,
   mockNegotiationById,
@@ -13,36 +13,16 @@ import {
   loadNegotiationWithSeller,
   mockListingSellerId,
 } from "@/lib/api/negotiation-access";
-
-function toOfferDto(o: {
-  id: string;
-  negotiationId: string;
-  userId: string;
-  amount: { toString(): string };
-  currency: string;
-  reasonType: string;
-  reasonNote: string | null;
-  status: OfferDto["status"];
-  createdAt: Date;
-}): OfferDto {
-  return {
-    id: o.id,
-    negotiationId: o.negotiationId,
-    userId: o.userId,
-    amount: o.amount.toString(),
-    currency: o.currency,
-    reasonType: o.reasonType,
-    reasonNote: o.reasonNote,
-    status: o.status,
-    createdAt: o.createdAt.toISOString(),
-  };
-}
+import { sendEmail, createNewOfferEmail } from "@/lib/email";
+import { toOfferDto } from "@/lib/api/serialize-offer";
 
 export async function GET(
   _req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const userId = (await getUserIdFromCookie()) || "dev-user-1";
+  const session = await auth();
+  if (!session) return jsonError("Unauthorized", 401);
+  const userId = session.user.id;
 
   const { id } = await ctx.params;
 
@@ -78,7 +58,9 @@ export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> },
 ) {
-  const userId = (await getUserIdFromCookie()) || "dev-user-1";
+  const session = await auth();
+  if (!session) return jsonError("Unauthorized", 401);
+  const userId = session.user.id;
 
   const { id } = await ctx.params;
   let raw: unknown;
@@ -187,6 +169,27 @@ export async function POST(
       reasonNote: body.reasonNote,
     },
   });
+
+  // Send notification email to the seller
+  const negotiation = await db.negotiation.findUnique({
+    where: { id },
+    include: {
+      listing: { include: { user: true } },
+      buyer: true,
+    },
+  });
+
+  if (negotiation && negotiation.listing.user.email) {
+    const emailNotification = createNewOfferEmail(
+      negotiation.listing.user.email,
+      negotiation.listing.user.name || "Usuario",
+      body.amount.toString(),
+      body.currency ?? "USD",
+      negotiation.listing.title,
+      id
+    );
+    await sendEmail(emailNotification);
+  }
 
   return jsonOk(toOfferDto(row), { status: 201 });
 }

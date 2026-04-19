@@ -4,6 +4,7 @@ import { jsonError, jsonOk } from "@/lib/api/http";
 import type { CreateMessageBody, MessageDto } from "@/lib/api/contracts";
 import { mockMessagesByThread } from "@/lib/api/mock-data";
 import { getUserIdFromCookie } from "@/lib/getUser";
+import { sendEmail, createNewMessageEmail } from "@/lib/email";
 
 function toMessageDto(m: {
   id: string;
@@ -101,6 +102,39 @@ export async function POST(
       isSystem: body.isSystem,
     },
   });
+
+  // Send notification email to the other participant
+  if (!body.isSystem && senderId) {
+    const thread = await db.thread.findUnique({
+      where: { id },
+      include: {
+        negotiation: {
+          include: {
+            buyer: true,
+            listing: { include: { user: true } },
+          },
+        },
+      },
+    });
+
+    if (thread) {
+      const buyer = thread.negotiation.buyer;
+      const seller = thread.negotiation.listing.user;
+      const recipient = senderId === buyer.id ? seller : buyer;
+
+      if (recipient.email) {
+        const sender = senderId === buyer.id ? buyer : seller;
+        const emailNotification = createNewMessageEmail(
+          recipient.email,
+          recipient.name || "Usuario",
+          sender.name || "Usuario",
+          body.content,
+          id
+        );
+        await sendEmail(emailNotification);
+      }
+    }
+  }
 
   return jsonOk(toMessageDto(row), { status: 201 });
 }

@@ -11,8 +11,6 @@
  * POST   /api/listings
  * GET    /api/listings/[id]
  * PATCH  /api/listings/[id]
- * GET    /api/listings/[id]/valuation
- * POST   /api/listings/[id]/valuation   (async job stub)
  * GET    /api/listings/[id]/negotiations
  * POST   /api/listings/[id]/negotiations
  * GET    /api/negotiations/[id]
@@ -40,7 +38,6 @@
  * - Decimal parsing on client (always treat price as string from API).
  * - Listing without images (empty array).
  * - Race: two buyers start negotiation on same listing (no unique constraint by design in MVP).
- * - Valuation job not implemented: POST returns accepted stub, GET may be null.
  */
 
 export const API_CONTRACT_VERSION = "1" as const;
@@ -54,9 +51,18 @@ export type ListingStatus =
   | "REJECTED"
   | "EXPIRED";
 
+export const VALID_LISTING_STATUSES: ListingStatus[] = [
+  "PENDING",
+  "APPROVED",
+  "SOLD",
+  "REJECTED",
+  "EXPIRED",
+];
+
 export type NegotiationStatus =
   | "ACTIVE"
   | "ACCEPTED"
+  | "CLOSED"
   | "REJECTED"
   | "EXPIRED";
 
@@ -107,24 +113,8 @@ export interface ListingSummary {
   user: UserPublic;
 }
 
-/** Detail = summary + optional valuation + negotiation ids (lazy-loaded) */
-export interface ListingDetail extends ListingSummary {
-  valuation: ValuationDto | null;
-}
-
-export interface ValuationDto {
-  id: string;
-  listingId: string;
-  chrono24Price: string | null;
-  mlPrice: string | null;
-  localDelta: string | null;
-  conditionDelta: string | null;
-  boxPapersDelta: string | null;
-  notes: string | null;
-  sources: unknown[];
-  createdAt: string;
-  updatedAt: string;
-}
+/** Detail = summary + negotiation ids (lazy-loaded) */
+export type ListingDetail = ListingSummary;
 
 export interface CreateListingBody {
   title: string;
@@ -217,14 +207,21 @@ export interface CreateMessageBody {
   isSystem: boolean;
 }
 
+export interface UserNegotiation {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  status: NegotiationStatus;
+  round: number;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+  threadId: string | null;
+}
+
 export interface HealthDto {
   ok: boolean;
   mock: boolean;
   contractVersion: typeof API_CONTRACT_VERSION;
 }
 
-/** POST /api/listings/[id]/valuation — async pipeline not implemented in MVP. */
-export interface ValuationJobAccepted {
-  jobId: string;
-  status: "queued";
-}

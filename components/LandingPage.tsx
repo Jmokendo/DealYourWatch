@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { DEV_USER } from "@/lib/devUser";
+import { NotificationDropdown } from "@/components/NotificationDropdown";
 import {
   ArrowRight,
   Camera,
@@ -74,6 +75,7 @@ function Nav() {
           <span className="hidden max-w-[10rem] truncate text-sm text-zinc-600 sm:inline">
             {currentUser.name ?? currentUser.email}
           </span>
+          <NotificationDropdown />
           <Button
             type="button"
             className="rounded-2xl"
