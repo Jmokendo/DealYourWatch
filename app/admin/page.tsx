@@ -852,7 +852,7 @@ const DEMO_ACTIONS: DemoAction[] = [
 
 function DemoToolsView({ toast, onUnauthorized }: { toast: AddToast; onUnauthorized: () => void }) {
   const [loadingId, setLoadingId] = useState<string | null>(null);
-  const [results, setResults] = useState<Record<string, unknown>>({});
+  const [results, setResults] = useState<Record<string, any>>({});
 
   const run = async (action: DemoAction) => {
     setLoadingId(action.id);
@@ -862,7 +862,7 @@ function DemoToolsView({ toast, onUnauthorized }: { toast: AddToast; onUnauthori
         onUnauthorized();
         return;
       }
-      const data = (await res.json()) as unknown;
+      const data = (await res.json()) as object;
       if (!res.ok) {
         const msg = typeof data === "object" && data !== null && "error" in data
           ? String((data as Record<string, unknown>).error)
@@ -925,7 +925,7 @@ function DemoToolsView({ toast, onUnauthorized }: { toast: AddToast; onUnauthori
                   )}
                 </Button>
 
-                {result && (
+                {result != null && (
                   <pre className="overflow-x-auto rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
                     {JSON.stringify(result, null, 2)}
                   </pre>

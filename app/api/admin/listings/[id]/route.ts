@@ -1,4 +1,4 @@
-import { requireSuperAdmin } from "@/lib/admin-auth";
+import { requireAdmin, requireSuperAdmin } from "@/lib/admin-auth";
 import { jsonError, jsonOk } from "@/lib/api/http";
 import { getPrisma } from "@/lib/prisma";
 import { VALID_LISTING_STATUSES } from "@/lib/api/contracts";
@@ -9,8 +9,8 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const auth = await requireSuperAdmin();
-  if ("status" in auth) return jsonError(auth.message, auth.status);
+  const adminId = await requireAdmin();
+  if (!adminId) return jsonError("Forbidden", 403);
 
   const { id } = await params;
   const db = getPrisma();
