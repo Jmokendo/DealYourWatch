@@ -2,25 +2,15 @@ import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import { PrismaClient } from "@prisma/client";
+import { getPrisma } from "@/lib/prisma";
 import { verifyPassword } from "@/lib/auth";
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
-
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient();
-
-if (process.env.NODE_ENV !== "production") {
-  globalForPrisma.prisma = prisma;
-}
+const prisma = getPrisma();
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   trustHost: true,
   secret: process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET,
-  adapter: PrismaAdapter(prisma),
+  adapter: prisma ? PrismaAdapter(prisma) : undefined,
   session: { strategy: "jwt", maxAge: 30 * 24 * 60 * 60 },
   providers: [
     Credentials({
@@ -37,6 +27,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           typeof credentials?.password === "string" ? credentials.password : "";
 
         if (!email || !password) return null;
+        if (!prisma) return null;
 
         const user = await prisma.user.findUnique({ where: { email } });
         if (!user?.password) return null;

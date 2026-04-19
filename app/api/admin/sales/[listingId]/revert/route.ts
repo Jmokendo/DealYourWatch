@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 // ADMIN: remove auth bypass before production
 import { getPrisma } from "@/lib/prisma";
 import { ok, notFound, conflict, serverError } from "@/lib/api";

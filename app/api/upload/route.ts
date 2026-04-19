@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { jsonError, jsonOk } from "@/lib/api/http";
 import type { UploadSignatureResponse } from "@/lib/api/contracts";
 import { requireAuthUser } from "@/lib/auth-session";

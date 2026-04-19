@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { isApiMockMode } from "@/lib/env";
 import { getPrisma } from "@/lib/prisma";
 import { jsonOk } from "@/lib/api/http";

@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { getPrisma } from "@/lib/prisma";
 import { ok, badRequest, notFound, serverError } from "@/lib/api";
 import { Condition, Prisma } from "@prisma/client";

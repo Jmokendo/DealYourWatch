@@ -1,15 +1,21 @@
-import { prisma } from "@/lib/prisma";
-import { getUserIdFromCookie } from "@/lib/getUser";
+export const runtime = "nodejs";
+
+import { getPrisma } from "@/lib/prisma";
+import { requireAuthUser } from "@/lib/auth-session";
 
 export async function GET() {
-  const userId = await getUserIdFromCookie();
-
-  if (!userId) {
+  const authUser = await requireAuthUser();
+  if (!authUser) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
+  const db = getPrisma();
+  if (!db) {
+    return Response.json({ error: "Database not configured" }, { status: 503 });
+  }
+
+  const user = await db.user.findUnique({
+    where: { id: authUser.id },
     select: {
       id: true,
       email: true,
@@ -17,16 +23,16 @@ export async function GET() {
     },
   });
 
-  const listings = await prisma.listing.findMany({
-    where: { userId },
+  const listings = await db.listing.findMany({
+    where: { userId: authUser.id },
     orderBy: { createdAt: "desc" },
   });
 
-  const negotiations = await prisma.negotiation.findMany({
+  const negotiations = await db.negotiation.findMany({
     where: {
       OR: [
-        { buyerId: userId },
-        { sellerId: userId },
+        { buyerId: authUser.id },
+        { listing: { userId: authUser.id } },
       ],
     },
     orderBy: { createdAt: "desc" },
