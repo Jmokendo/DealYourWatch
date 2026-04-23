@@ -92,7 +92,13 @@ export interface UserPublic {
 export interface ListingImageDto {
   id: string;
   url: string;
+  publicId?: string | null;
   order: number;
+}
+
+export interface CreateListingImageInput {
+  url: string;
+  publicId?: string | null;
 }
 
 /** Card / feed shape */
@@ -122,6 +128,8 @@ export interface CreateListingBody {
   price: number;
   userName?: string;
   imageUrl?: string;
+  imageUrls?: string[];
+  images?: CreateListingImageInput[];
   description?: string;
   /** When omitted, server assigns catalog fallback model (see catalog.ts). */
   modelId?: string;
@@ -143,6 +151,12 @@ export interface PatchListingBody {
 
 export interface UploadResponse {
   url: string;
+  publicId?: string;
+  secure_url?: string;
+  public_id?: string;
+  width?: number | null;
+  height?: number | null;
+  bytes?: number;
 }
 
 export interface NegotiationSummary {

@@ -1,5 +1,14 @@
 import { PrismaClient } from "@prisma/client";
 
+console.log("Using DATABASE_URL:", !!process.env.DATABASE_URL?.trim());
+
+if (!process.env.DATABASE_URL?.trim()) {
+  console.error(
+    "[prisma] DATABASE_URL is not set. Database operations will fail. " +
+      "Set DATABASE_URL to a valid PostgreSQL connection string."
+  );
+}
+
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };

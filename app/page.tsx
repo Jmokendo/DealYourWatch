@@ -1,7 +1,5 @@
-import LandingPage from "@/components/LandingPage";
+import HomeGuestPage from "@/components/home/HomeGuestPage";
 
 export default function Home() {
-  return (
-    <LandingPage />
-  );
+  return <HomeGuestPage />;
 }
