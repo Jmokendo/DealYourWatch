@@ -93,6 +93,18 @@ function getConditionCount(
   return listings.filter((listing) => listing.condition === value).length;
 }
 
+function isConditionValue(value: string): value is Condition {
+  return conditionOptions.some((option) => option.value === value);
+}
+
+function isAccessoryValue(value: string): value is Exclude<AccessoryValue, ""> {
+  return accessoryOptions.some((option) => option.value === value);
+}
+
+function isYearValue(value: string): value is Exclude<YearValue, ""> {
+  return yearOptions.some((option) => option.value === value);
+}
+
 export function ListingsFeedPage({
   initialQuery = "",
 }: ListingsFeedPageProps) {
@@ -302,6 +314,24 @@ export function ListingsFeedPage({
     setQuery(value);
   };
 
+  const handleConditionChange = (value: string) => {
+    if (value === "" || isConditionValue(value)) {
+      setConditionFilter(value);
+    }
+  };
+
+  const handleAccessoryChange = (value: string) => {
+    if (value === "" || isAccessoryValue(value)) {
+      setAccessoryFilter(value);
+    }
+  };
+
+  const handleYearChange = (value: string) => {
+    if (value === "" || isYearValue(value)) {
+      setYearFilter(value);
+    }
+  };
+
   const clearSearchFilters = () => {
     setActiveBrand("Todos");
     setMinPrice("");
@@ -345,7 +375,7 @@ export function ListingsFeedPage({
         count: listings ? getConditionCount(listings, option.value) : 0,
       }))}
       activeCondition={conditionFilter}
-      onConditionChange={setConditionFilter}
+      onConditionChange={handleConditionChange}
       accessories={accessoryOptions.map((option) => ({
         value: option.value,
         label: option.label,
@@ -353,7 +383,7 @@ export function ListingsFeedPage({
           listings?.filter((listing) => matchesAccessory(listing, option.value)).length ?? 0,
       }))}
       activeAccessory={accessoryFilter}
-      onAccessoryChange={setAccessoryFilter}
+      onAccessoryChange={handleAccessoryChange}
       years={yearOptions.map((option) => ({
         value: option.value,
         label: option.label,
@@ -361,7 +391,7 @@ export function ListingsFeedPage({
           listings?.filter((listing) => matchesYearRange(listing, option.value)).length ?? 0,
       }))}
       activeYear={yearFilter}
-      onYearChange={setYearFilter}
+      onYearChange={handleYearChange}
       onApplyFilters={() => undefined}
     />
   ) : null;

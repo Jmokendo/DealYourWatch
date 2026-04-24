@@ -1,21 +1,21 @@
 import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
-interface ListingsFeedToolbarProps {
+interface ListingsFeedToolbarProps<TSort extends string> {
   query: string;
   onQueryChange: (value: string) => void;
   brands: string[];
   activeBrand: string;
   onBrandChange: (value: string) => void;
-  sortBy: string;
-  onSortChange: (value: string) => void;
-  sortOptions: Array<{ value: string; label: string }>;
+  sortBy: TSort;
+  onSortChange: (value: TSort) => void;
+  sortOptions: ReadonlyArray<{ value: TSort; label: string }>;
   listingCount: number;
   showBrandRail?: boolean;
   showSummary?: boolean;
 }
 
-export function ListingsFeedToolbar({
+export function ListingsFeedToolbar<TSort extends string>({
   query,
   onQueryChange,
   brands,
@@ -27,7 +27,7 @@ export function ListingsFeedToolbar({
   listingCount,
   showBrandRail = true,
   showSummary = true,
-}: ListingsFeedToolbarProps) {
+}: ListingsFeedToolbarProps<TSort>) {
   return (
     <section className="space-y-5">
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
@@ -74,7 +74,15 @@ export function ListingsFeedToolbar({
             <span>Ordenar:</span>
             <select
               value={sortBy}
-              onChange={(event) => onSortChange(event.target.value)}
+              onChange={(event) => {
+                const selectedOption = sortOptions.find(
+                  (option) => option.value === event.target.value,
+                );
+
+                if (selectedOption) {
+                  onSortChange(selectedOption.value);
+                }
+              }}
               className="min-w-[9rem] rounded-full border border-transparent bg-transparent pr-6 font-medium text-[#434246] focus-visible:outline-none"
             >
               {sortOptions.map((option) => (
