@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { CreateListingImageInput } from "@/lib/api/contracts";
@@ -17,6 +17,11 @@ interface ImageUploaderProps {
 
 const MAX_IMAGES = 8;
 const MAX_BYTES = 10 * 1024 * 1024;
+
+interface LocalPreviewItem {
+  id: string;
+  url: string;
+}
 
 function pickString(
   record: Record<string, unknown>,
@@ -36,12 +41,24 @@ function parseUploadPayload(payload: unknown): {
   }
 
   const record = payload as Record<string, unknown>;
+  const nestedData =
+    typeof record.data === "object" && record.data !== null
+      ? (record.data as Record<string, unknown>)
+      : null;
 
   return {
-    url: pickString(record, "url") ?? pickString(record, "secure_url"),
+    url:
+      pickString(nestedData ?? {}, "url") ??
+      pickString(nestedData ?? {}, "secure_url") ??
+      pickString(record, "url") ??
+      pickString(record, "secure_url"),
     publicId:
-      pickString(record, "publicId") ?? pickString(record, "public_id"),
-    error: pickString(record, "error"),
+      pickString(nestedData ?? {}, "publicId") ??
+      pickString(nestedData ?? {}, "public_id") ??
+      pickString(record, "publicId") ??
+      pickString(record, "public_id"),
+    error:
+      pickString(nestedData ?? {}, "error") ?? pickString(record, "error"),
   };
 }
 
@@ -53,12 +70,65 @@ export function ImageUploader({
   disabled,
 }: ImageUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const objectUrlsRef = useRef(new Set<string>());
   const [uploading, setUploading] = useState(false);
+  const [localPreviews, setLocalPreviews] = useState<LocalPreviewItem[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    return () => {
+      for (const url of objectUrlsRef.current) {
+        URL.revokeObjectURL(url);
+      }
+      objectUrlsRef.current.clear();
+    };
+  }, []);
 
   function updateUploading(nextValue: boolean) {
     setUploading(nextValue);
     onUploadingChange?.(nextValue);
+  }
+
+  function createLocalPreview(file: File, index: number): LocalPreviewItem {
+    const url = URL.createObjectURL(file);
+    objectUrlsRef.current.add(url);
+
+    const randomPart =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+    return {
+      id: `${file.name}-${file.lastModified}-${index}-${randomPart}`,
+      url,
+    };
+  }
+
+  function clearLocalPreview(previewId: string) {
+    setLocalPreviews((current) => {
+      const target = current.find((item) => item.id === previewId);
+      if (target && objectUrlsRef.current.has(target.url)) {
+        URL.revokeObjectURL(target.url);
+        objectUrlsRef.current.delete(target.url);
+      }
+
+      return current.filter((item) => item.id !== previewId);
+    });
+  }
+
+  function clearLocalPreviews(previewIds: Set<string>) {
+    if (previewIds.size === 0) return;
+
+    setLocalPreviews((current) => {
+      for (const item of current) {
+        if (!previewIds.has(item.id)) continue;
+        if (!objectUrlsRef.current.has(item.url)) continue;
+        URL.revokeObjectURL(item.url);
+        objectUrlsRef.current.delete(item.url);
+      }
+
+      return current.filter((item) => !previewIds.has(item.id));
+    });
   }
 
   async function uploadFile(file: File): Promise<CreateListingImageInput> {
@@ -106,21 +176,35 @@ export function ImageUploader({
 
     setError(null);
     updateUploading(true);
+    let pendingPreviewIds = new Set<string>();
 
     try {
-      const uploadedImages: CreateListingImageInput[] = [];
+      const nextImages: CreateListingImageInput[] = [...images];
+      const previews = files.map((file, index) => createLocalPreview(file, index));
+      pendingPreviewIds = new Set(previews.map((preview) => preview.id));
+      setLocalPreviews((current) => [...current, ...previews]);
 
-      for (const file of files) {
-        uploadedImages.push(await uploadFile(file));
+      for (const [index, file] of files.entries()) {
+        const preview = previews[index];
+
+        try {
+          const uploaded = await uploadFile(file);
+          nextImages.push(uploaded);
+          onChange([...nextImages]);
+        } finally {
+          if (preview) {
+            pendingPreviewIds.delete(preview.id);
+            clearLocalPreview(preview.id);
+          }
+        }
       }
-
-      onChange([...images, ...uploadedImages]);
     } catch (uploadError) {
       setError(
         uploadError instanceof Error
           ? uploadError.message
           : "Error al subir imagen",
       );
+      clearLocalPreviews(pendingPreviewIds);
     } finally {
       updateUploading(false);
     }
@@ -197,8 +281,26 @@ export function ImageUploader({
         />
       </div>
 
-      {images.length > 0 ? (
+      {images.length > 0 || localPreviews.length > 0 ? (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {localPreviews.map((preview, index) => (
+            <div
+              key={preview.id}
+              className="relative overflow-hidden rounded-[20px] border border-[#dfdbd4] bg-[#f7f6f3]"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={preview.url}
+                alt={`Vista previa local ${index + 1}`}
+                className="h-44 w-full object-cover"
+              />
+
+              <div className="absolute left-3 top-3 rounded-full bg-[#1d1d21] px-3 py-1 text-xs font-medium text-white">
+                Subiendo
+              </div>
+            </div>
+          ))}
+
           {images.map((image, index) => (
             <div
               key={`${image.url}-${index}`}
