@@ -4,6 +4,7 @@ import type {
   NegotiationStatus,
   OfferStatus,
 } from "@/lib/api/contracts";
+import { normalizeListingImageUrl } from "@/lib/listing-images";
 
 const conditionLabels: Record<Condition, string> = {
   NEW: "New",
@@ -56,7 +57,12 @@ export function getOfferStatusLabel(status: OfferStatus) {
 }
 
 export function getListingPrimaryImage(listing: ListingSummary) {
-  return listing.images[0]?.url ?? null;
+  for (const image of listing.images) {
+    const url = normalizeListingImageUrl(image.url);
+    if (url) return url;
+  }
+
+  return null;
 }
 
 export function getListingDetailHref(listingId: string) {

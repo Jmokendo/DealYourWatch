@@ -7,7 +7,14 @@ import type {
 import { toListingSummary } from "@/lib/api/serialize-listing";
 import { LISTING_INCLUDE } from "@/lib/api/listings";
 import { ensureFallbackWatchModelId } from "@/lib/api/catalog";
+import { normalizeListingImageUrl } from "@/lib/listing-images";
 import { serviceFail, serviceOk, type ServiceResult } from "@/lib/services/types";
+
+function normalizePublicId(value: string | null | undefined): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
+}
 
 export function normalizeCreateListingImages(
   body: CreateListingBody,
@@ -15,26 +22,26 @@ export function normalizeCreateListingImages(
   const images = new Map<string, CreateListingImageInput>();
 
   for (const image of body.images ?? []) {
-    const url = image.url.trim();
+    const url = normalizeListingImageUrl(image.url);
     if (!url) continue;
 
-    const publicId =
-      typeof image.publicId === "string" ? image.publicId.trim() || undefined : undefined;
+    const publicId = normalizePublicId(image.publicId);
+    const existing = images.get(url);
 
     images.set(url, {
       url,
-      publicId: publicId ?? images.get(url)?.publicId ?? null,
+      publicId: existing?.publicId ?? publicId ?? null,
     });
   }
 
   for (const urlValue of body.imageUrls ?? []) {
-    const url = urlValue.trim();
+    const url = normalizeListingImageUrl(urlValue);
     if (!url || images.has(url)) continue;
     images.set(url, { url, publicId: null });
   }
 
   if (body.imageUrl) {
-    const url = body.imageUrl.trim();
+    const url = normalizeListingImageUrl(body.imageUrl);
     if (url && !images.has(url)) {
       images.set(url, { url, publicId: null });
     }

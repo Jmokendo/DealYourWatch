@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useMemo, useState } from "react";
 import type { ListingDetail } from "@/lib/api/contracts";
+import { normalizeListingImageUrl } from "@/lib/listing-images";
 import { getListingPrimaryImage } from "@/lib/marketplace-ui";
 
 interface ListingGalleryProps {
@@ -10,12 +11,29 @@ interface ListingGalleryProps {
 }
 
 function buildGalleryItems(listing: ListingDetail) {
-  if (listing.images.length > 0) {
-    return listing.images.map((image, index) => ({
-      id: image.id,
-      url: image.url,
-      alt: `${listing.title} ${index + 1}`,
-    }));
+  const persistedImages = listing.images
+    .map((image, index) => {
+      const url = normalizeListingImageUrl(image.url);
+      if (!url) return null;
+
+      return {
+        id: image.id,
+        url,
+        alt: `${listing.title} ${index + 1}`,
+      };
+    })
+    .filter(
+      (
+        item,
+      ): item is {
+        id: string;
+        url: string;
+        alt: string;
+      } => item !== null,
+    );
+
+  if (persistedImages.length > 0) {
+    return persistedImages;
   }
 
   return Array.from({ length: 5 }).map((_, index) => ({
@@ -37,7 +55,7 @@ export function ListingGallery({ listing }: ListingGalleryProps) {
     <div className="space-y-4">
       <div className="relative overflow-hidden rounded-[26px] border border-[#e2ddd6] bg-white">
         <div className="absolute left-4 top-4 z-10 inline-flex items-center gap-1 rounded-full bg-[#1d1d21] px-4 py-1.5 text-sm font-semibold text-white">
-          ✓ Verificado
+          Verificado
         </div>
 
         <div className="relative aspect-[1.08/0.9] bg-[#efede8]">

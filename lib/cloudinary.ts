@@ -1,10 +1,19 @@
 import "server-only";
 
-import { createHash, randomBytes } from "crypto";
+import { randomBytes } from "crypto";
+import {
+  v2 as cloudinary,
+  type UploadApiErrorResponse,
+  type UploadApiResponse,
+} from "cloudinary";
+import { isCloudinaryUrl } from "@/lib/listing-images";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const DEFAULT_PUBLIC_ROOT = "dealyourwatch/listings";
 const RANDOM_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
+const DEFAULT_PUBLIC_ID_SEGMENT = "upload";
+
+let cloudinaryConfigured = false;
 
 function requireEnv(
   name:
@@ -73,65 +82,72 @@ export function buildListingImagePublicId(listingId: string) {
   return `${publicRoot}/${safeListingId}/${timestamp}-${random}`;
 }
 
-function buildSignature(params: Record<string, string>, apiSecret: string) {
-  const toSign = Object.entries(params)
-    .filter(([, value]) => value.length > 0)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([key, value]) => `${key}=${value}`)
-    .join("&");
+function ensureCloudinaryConfigured() {
+  if (cloudinaryConfigured) return;
 
-  return createHash("sha1").update(`${toSign}${apiSecret}`).digest("hex");
+  const { cloudName, apiKey, apiSecret } = getCloudinaryConfig();
+  cloudinary.config({
+    cloud_name: cloudName,
+    api_key: apiKey,
+    api_secret: apiSecret,
+    secure: true,
+  });
+  cloudinaryConfigured = true;
 }
 
 export async function uploadListingImageToCloudinary(
   file: File,
-  listingId: string,
+  listingId?: string,
 ) {
   validateImageFile(file);
+  const { cloudName } = getCloudinaryConfig();
+  ensureCloudinaryConfigured();
 
-  const { cloudName, apiKey, apiSecret } = getCloudinaryConfig();
-  const uploadTimestamp = Math.floor(Date.now() / 1000).toString();
-  const publicId = buildListingImagePublicId(listingId);
-  const signatureParams = {
-    public_id: publicId,
-    timestamp: uploadTimestamp,
-  };
+  const publicId = buildListingImagePublicId(
+    listingId?.trim() || DEFAULT_PUBLIC_ID_SEGMENT,
+  );
+  const arrayBuffer = await file.arrayBuffer();
+  const buffer = Buffer.from(arrayBuffer);
 
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("api_key", apiKey);
-  formData.append("public_id", publicId);
-  formData.append("timestamp", uploadTimestamp);
-  formData.append("signature", buildSignature(signatureParams, apiSecret));
+  const uploadResult = await new Promise<UploadApiResponse>(
+    (resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          resource_type: "image",
+          public_id: publicId,
+        },
+        (
+          error: UploadApiErrorResponse | undefined,
+          result: UploadApiResponse | undefined,
+        ) => {
+          if (error) {
+            reject(new Error(error.message || "Cloudinary upload failed."));
+            return;
+          }
 
-  const response = await fetch(
-    `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
-    {
-      method: "POST",
-      body: formData,
+          if (!result?.secure_url || !result.public_id) {
+            reject(new Error("Cloudinary upload returned an invalid response."));
+            return;
+          }
+
+          resolve(result);
+        },
+      );
+
+      stream.end(buffer);
     },
   );
 
-  const data = (await response.json()) as
-    | {
-        secure_url?: string;
-        public_id?: string;
-        width?: number;
-        height?: number;
-        bytes?: number;
-        error?: { message?: string };
-      }
-    | undefined;
-
-  if (!response.ok || !data?.secure_url || !data.public_id) {
-    throw new Error(data?.error?.message ?? "No se pudo subir la imagen.");
+  const secureUrl = uploadResult.secure_url.trim();
+  if (!isCloudinaryUrl(secureUrl, cloudName)) {
+    throw new Error("Cloudinary upload returned an unexpected URL.");
   }
 
   return {
-    url: data.secure_url,
-    publicId: data.public_id,
-    width: data.width ?? null,
-    height: data.height ?? null,
-    bytes: data.bytes ?? file.size,
+    url: secureUrl,
+    publicId: uploadResult.public_id,
+    width: uploadResult.width ?? null,
+    height: uploadResult.height ?? null,
+    bytes: uploadResult.bytes ?? file.size,
   };
 }

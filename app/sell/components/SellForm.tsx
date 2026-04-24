@@ -18,6 +18,7 @@ import { ImageUploadSection } from "@/components/sell/ImageUploadSection";
 import { DetailsSection } from "@/components/sell/DetailsSection";
 import { ConditionSection } from "@/components/sell/ConditionSection";
 import { PricingSection } from "@/components/sell/PricingSection";
+import { normalizeListingImageUrl } from "@/lib/listing-images";
 
 const CONDITIONS: Array<{ value: Condition; label: string; hint: string }> = [
   { value: "NEW", label: "Nuevo", hint: "Sin uso" },
@@ -41,6 +42,7 @@ export function SellForm() {
   const [brands, setBrands] = useState<BrandSummary[]>([]);
   const [brandId, setBrandId] = useState("");
   const [busy, setBusy] = useState(false);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draftListingId] = useState(() => {
     const randomPart =
@@ -61,7 +63,23 @@ export function SellForm() {
     [condition],
   );
 
-  const imageUrls = images.map((image) => image.url);
+  const normalizedImages = useMemo(() => {
+    const deduplicated = new Map<string, CreateListingImageInput>();
+
+    for (const image of images) {
+      const url = normalizeListingImageUrl(image.url);
+      if (!url) continue;
+
+      const publicId =
+        typeof image.publicId === "string" ? image.publicId.trim() || null : null;
+
+      deduplicated.set(url, { url, publicId });
+    }
+
+    return [...deduplicated.values()];
+  }, [images]);
+
+  const imageUrls = normalizedImages.map((image) => image.url);
   const primaryImageUrl = imageUrls[0] ?? "";
 
   const completedSteps = useMemo(
@@ -93,6 +111,11 @@ export function SellForm() {
     event.preventDefault();
     setError(null);
 
+    if (isUploadingImages) {
+      setError("Espera a que termine la subida de imagenes.");
+      return;
+    }
+
     const parsedPrice = parseFloat(price);
     if (isNaN(parsedPrice) || parsedPrice <= 0) {
       setError("Ingresa un precio valido.");
@@ -106,7 +129,7 @@ export function SellForm() {
         price: parsedPrice,
         condition,
         description: description.trim() || undefined,
-        images: images.length > 0 ? images : undefined,
+        images: normalizedImages.length > 0 ? normalizedImages : undefined,
         imageUrl: primaryImageUrl || undefined,
         imageUrls: imageUrls.length > 0 ? imageUrls : undefined,
         currency,
@@ -161,7 +184,8 @@ export function SellForm() {
                     listingId={draftListingId}
                     images={images}
                     onChange={setImages}
-                    disabled={busy}
+                    onUploadingChange={setIsUploadingImages}
+                    disabled={busy || isUploadingImages}
                   />
                 }
               />
@@ -285,7 +309,7 @@ export function SellForm() {
                     currency={currency}
                     label="Precio"
                     required
-                    disabled={busy}
+                    disabled={busy || isUploadingImages}
                   />
                 }
               />
@@ -312,7 +336,7 @@ export function SellForm() {
 
             <Button
               type="submit"
-              disabled={busy || !title.trim() || !price}
+              disabled={busy || isUploadingImages || !title.trim() || !price}
               className="h-11 min-w-[280px] rounded-full bg-[#1d1d21] px-10 text-base font-semibold text-white hover:bg-[#303036] sm:min-w-[320px]"
             >
               {busy ? (

@@ -3,28 +3,63 @@
 import { useRef, useState } from "react";
 import { Loader2, Upload, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { CreateListingImageInput, UploadResponse } from "@/lib/api/contracts";
+import type { CreateListingImageInput } from "@/lib/api/contracts";
+import { normalizeListingImageUrl } from "@/lib/listing-images";
 import { cn } from "@/lib/utils";
 
 interface ImageUploaderProps {
   listingId: string;
   images: CreateListingImageInput[];
   onChange: (images: CreateListingImageInput[]) => void;
+  onUploadingChange?: (uploading: boolean) => void;
   disabled?: boolean;
 }
 
 const MAX_IMAGES = 8;
 const MAX_BYTES = 10 * 1024 * 1024;
 
+function pickString(
+  record: Record<string, unknown>,
+  key: string,
+): string | null {
+  const value = record[key];
+  return typeof value === "string" ? value : null;
+}
+
+function parseUploadPayload(payload: unknown): {
+  url: string | null;
+  publicId: string | null;
+  error: string | null;
+} {
+  if (!payload || typeof payload !== "object") {
+    return { url: null, publicId: null, error: null };
+  }
+
+  const record = payload as Record<string, unknown>;
+
+  return {
+    url: pickString(record, "url") ?? pickString(record, "secure_url"),
+    publicId:
+      pickString(record, "publicId") ?? pickString(record, "public_id"),
+    error: pickString(record, "error"),
+  };
+}
+
 export function ImageUploader({
   listingId,
   images,
   onChange,
+  onUploadingChange,
   disabled,
 }: ImageUploaderProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  function updateUploading(nextValue: boolean) {
+    setUploading(nextValue);
+    onUploadingChange?.(nextValue);
+  }
 
   async function uploadFile(file: File): Promise<CreateListingImageInput> {
     if (!file.type.startsWith("image/")) {
@@ -42,17 +77,20 @@ export function ImageUploader({
     const response = await fetch("/api/upload", {
       method: "POST",
       body: form,
+      credentials: "same-origin",
     });
 
-    const data = (await response.json()) as UploadResponse & { error?: string };
-    const url = data.url ?? data.secure_url;
+    const rawPayload: unknown = await response.json().catch(() => null);
+    const data = parseUploadPayload(rawPayload);
+    const url = normalizeListingImageUrl(data.url);
+
     if (!response.ok || !url) {
       throw new Error(data.error ?? "Error al subir imagen");
     }
 
     return {
       url,
-      publicId: data.publicId ?? data.public_id ?? null,
+      publicId: data.publicId ?? null,
     };
   }
 
@@ -67,7 +105,7 @@ export function ImageUploader({
     if (files.length === 0) return;
 
     setError(null);
-    setUploading(true);
+    updateUploading(true);
 
     try {
       const uploadedImages: CreateListingImageInput[] = [];
@@ -84,7 +122,7 @@ export function ImageUploader({
           : "Error al subir imagen",
       );
     } finally {
-      setUploading(false);
+      updateUploading(false);
     }
   }
 

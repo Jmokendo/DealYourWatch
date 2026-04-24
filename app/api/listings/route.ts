@@ -15,6 +15,16 @@ import {
   normalizeCreateListingImages,
 } from "@/lib/services/listing-service";
 
+function hasProvidedImageFields(rawBody: {
+  imageUrl?: string;
+  imageUrls?: string[];
+  images?: Array<{ url: string }>;
+}) {
+  if (Array.isArray(rawBody.images) && rawBody.images.length > 0) return true;
+  if (Array.isArray(rawBody.imageUrls) && rawBody.imageUrls.length > 0) return true;
+  return typeof rawBody.imageUrl === "string" && rawBody.imageUrl.trim().length > 0;
+}
+
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const status = searchParams.get("status") as ListingStatus | null;
@@ -122,6 +132,9 @@ export async function POST(req: Request) {
 
   const b = parsed.body;
   const images = normalizeCreateListingImages(b);
+  if (hasProvidedImageFields(b) && images.length === 0) {
+    return jsonError("Invalid image payload", 400);
+  }
 
   if (isApiMockMode()) {
     const now = new Date().toISOString();
