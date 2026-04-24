@@ -1,7 +1,7 @@
 import bcrypt from 'bcryptjs';
-import { PrismaClient } from '@prisma/client'
+import { getPrisma } from '../lib/prisma'
 
-const prisma = new PrismaClient()
+const prisma = getPrisma()
 
 async function main() {
   const superAdminEmail = process.env.SUPER_ADMIN_EMAIL ?? 'jmoquendo@admin.com'

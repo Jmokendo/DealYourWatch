@@ -13,16 +13,22 @@ const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-export const prisma =
-  globalForPrisma.prisma ??
-  new PrismaClient({
+function buildClient() {
+  const url = process.env.DATABASE_URL?.trim();
+  if (!url) {
+    throw new Error("DATABASE_URL is required for Prisma. Configure a PostgreSQL connection string.");
+  }
+
+  return new PrismaClient({
     log: ["error"],
+    datasources: { db: { url } },
   });
+}
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+export function getPrisma(): PrismaClient {
+  if (!globalForPrisma.prisma) {
+    globalForPrisma.prisma = buildClient();
+  }
 
-/** Returns null when no DATABASE_URL (callers should use API mocks instead). */
-export function getPrisma(): PrismaClient | null {
-  if (!process.env.DATABASE_URL?.trim()) return null;
-  return prisma;
+  return globalForPrisma.prisma;
 }

@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { isApiMockMode } from "@/lib/env";
 import { jsonOk } from "@/lib/api/http";
 import type { HealthDto } from "@/lib/api/contracts";

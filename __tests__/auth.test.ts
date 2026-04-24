@@ -66,7 +66,7 @@ describe('Auth Functions', () => {
     })
 
     const result = await auth()
-    expect(result).toEqual({ user: { id: 'user-1' } })
+    expect(result).toEqual({ user: { id: 'user-1', role: 'USER' } })
   })
 
   it('should return null for invalid token', async () => {

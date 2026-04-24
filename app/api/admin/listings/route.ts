@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { requireAdmin } from "@/lib/admin-auth";
 import { jsonError, jsonOk } from "@/lib/api/http";
 import { getPrisma } from "@/lib/prisma";

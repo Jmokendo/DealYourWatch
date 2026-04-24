@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { jsonError, jsonOk } from "@/lib/api/http";
 import { uploadListingImageToCloudinary } from "@/lib/cloudinary";
 import { getUserIdFromCookie } from "@/lib/getUser";

@@ -1,6 +1,7 @@
 import "server-only";
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
+import { getJwtSecret } from "@/lib/server/jwt-secret";
 
 export async function getUserIdFromCookie() {
   const cookieStore = await cookies();
@@ -9,7 +10,7 @@ export async function getUserIdFromCookie() {
   if (!token) return null;
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!);
+    const decoded = jwt.verify(token, getJwtSecret());
     return (decoded as { userId?: string }).userId ?? null;
   } catch {
     return null;

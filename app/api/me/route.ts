@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { auth } from "@/lib/auth";
 import { getPrisma } from "@/lib/prisma";
 import { jsonError, jsonOk } from "@/lib/api/http";
