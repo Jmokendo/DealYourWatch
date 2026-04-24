@@ -5,7 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { formatMoney, getConditionLabel } from "@/lib/marketplace-ui";
+import {
+  formatMoney,
+  getConditionLabel,
+  getListingDetailHref,
+  getListingPrimaryImage,
+} from "@/lib/marketplace-ui";
 import type { ListingSummary, ListingStatus } from "@/lib/api/contracts";
 
 const STATUS_STYLES: Record<ListingStatus, string> = {
@@ -21,7 +26,7 @@ interface ListingCardProps {
 }
 
 export function ListingCard({ listing }: ListingCardProps) {
-  const image = listing.images[0]?.url;
+  const image = getListingPrimaryImage(listing);
   const statusLabel =
     listing.status.charAt(0) + listing.status.slice(1).toLowerCase();
 
@@ -79,7 +84,7 @@ export function ListingCard({ listing }: ListingCardProps) {
           </div>
         </div>
         <Button asChild variant="outline" size="sm" className="w-full rounded-[10px]">
-          <Link href={`/listings/${listing.id}`}>Ver detalle</Link>
+          <Link href={getListingDetailHref(listing.id)}>Ver detalle</Link>
         </Button>
       </CardContent>
     </Card>

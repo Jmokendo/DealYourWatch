@@ -9,7 +9,11 @@ import { toListingSummary } from "@/lib/api/serialize-listing";
 import { LISTING_INCLUDE } from "@/lib/api/listings";
 import type { ListingStatus, ListingSummary } from "@/lib/api/contracts";
 import { auth } from "@/lib/auth";
-import { createListing, getUserListings } from "@/lib/services/listing-service";
+import {
+  createListing,
+  getUserListings,
+  normalizeCreateListingImages,
+} from "@/lib/services/listing-service";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
@@ -117,6 +121,7 @@ export async function POST(req: Request) {
   if (!parsed.ok) return jsonError(parsed.error, 400);
 
   const b = parsed.body;
+  const images = normalizeCreateListingImages(b);
 
   if (isApiMockMode()) {
     const now = new Date().toISOString();
@@ -132,7 +137,12 @@ export async function POST(req: Request) {
       status: "PENDING",
       createdAt: now,
       updatedAt: now,
-      images: b.imageUrl ? [{ id: `img-${Date.now()}`, url: b.imageUrl, order: 0 }] : [],
+      images: images.map((image, index) => ({
+        id: `img-${Date.now()}-${index}`,
+        url: image.url,
+        publicId: image.publicId ?? null,
+        order: index,
+      })),
       model: {
         id: "mock-model-fallback",
         name: "Unspecified",

@@ -95,4 +95,36 @@ describe('Create Listing Validation', () => {
       expect(result.body.condition).toBe('MINT')
     }
   })
+
+  it('should accept image objects with optional publicId', () => {
+    const input = {
+      title: 'Test Watch',
+      price: 1000,
+      images: [
+        {
+          url: 'https://res.cloudinary.com/demo/image/upload/sample.jpg',
+          publicId: 'dealyourwatch/listings/draft-123/sample',
+        },
+        {
+          url: 'https://example.com/legacy-image.jpg',
+        },
+      ],
+    }
+
+    const result = parseCreateListingBody(input)
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.body.images).toEqual([
+        {
+          url: 'https://res.cloudinary.com/demo/image/upload/sample.jpg',
+          publicId: 'dealyourwatch/listings/draft-123/sample',
+        },
+        {
+          url: 'https://example.com/legacy-image.jpg',
+          publicId: undefined,
+        },
+      ])
+    }
+  })
 })

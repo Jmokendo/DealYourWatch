@@ -2,7 +2,7 @@ import type { Listing } from "@prisma/client";
 import type { ListingSummary } from "@/lib/api/contracts";
 
 type ListingWithRelations = Listing & {
-  images: { id: string; url: string; order: number }[];
+  images: { id: string; url: string; publicId: string | null; order: number }[];
   model: {
     id: string;
     name: string;
@@ -34,6 +34,7 @@ export function toListingSummary(row: ListingWithRelations): ListingSummary {
     images: row.images.map((i) => ({
       id: i.id,
       url: i.url,
+      publicId: i.publicId,
       order: i.order,
     })),
     model: {

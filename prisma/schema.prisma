@@ -79,6 +79,7 @@ model ListingImage {
   id        String   @id @default(cuid())
   listingId String
   url       String
+  publicId  String?
   order     Int      @default(0)
   createdAt DateTime @default(now())
   listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)

@@ -1,5 +1,6 @@
 import type {
   Condition,
+  ListingSummary,
   NegotiationStatus,
   OfferStatus,
 } from "@/lib/api/contracts";
@@ -52,4 +53,12 @@ export function getNegotiationStatusLabel(status: NegotiationStatus) {
 
 export function getOfferStatusLabel(status: OfferStatus) {
   return offerStatusLabels[status];
+}
+
+export function getListingPrimaryImage(listing: ListingSummary) {
+  return listing.images[0]?.url ?? null;
+}
+
+export function getListingDetailHref(listingId: string) {
+  return `/listings/${listingId}`;
 }

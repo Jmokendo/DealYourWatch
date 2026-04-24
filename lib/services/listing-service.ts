@@ -1,15 +1,55 @@
 import type { PrismaClient } from "@prisma/client";
-import type { CreateListingBody, ListingSummary } from "@/lib/api/contracts";
+import type {
+  CreateListingBody,
+  CreateListingImageInput,
+  ListingSummary,
+} from "@/lib/api/contracts";
 import { toListingSummary } from "@/lib/api/serialize-listing";
 import { LISTING_INCLUDE } from "@/lib/api/listings";
 import { ensureFallbackWatchModelId } from "@/lib/api/catalog";
 import { serviceFail, serviceOk, type ServiceResult } from "@/lib/services/types";
+
+export function normalizeCreateListingImages(
+  body: CreateListingBody,
+): CreateListingImageInput[] {
+  const images = new Map<string, CreateListingImageInput>();
+
+  for (const image of body.images ?? []) {
+    const url = image.url.trim();
+    if (!url) continue;
+
+    const publicId =
+      typeof image.publicId === "string" ? image.publicId.trim() || undefined : undefined;
+
+    images.set(url, {
+      url,
+      publicId: publicId ?? images.get(url)?.publicId ?? null,
+    });
+  }
+
+  for (const urlValue of body.imageUrls ?? []) {
+    const url = urlValue.trim();
+    if (!url || images.has(url)) continue;
+    images.set(url, { url, publicId: null });
+  }
+
+  if (body.imageUrl) {
+    const url = body.imageUrl.trim();
+    if (url && !images.has(url)) {
+      images.set(url, { url, publicId: null });
+    }
+  }
+
+  return [...images.values()];
+}
 
 export async function createListing(
   db: PrismaClient,
   userId: string,
   body: CreateListingBody,
 ): Promise<ServiceResult<ListingSummary>> {
+  const images = normalizeCreateListingImages(body);
+
   const modelId = body.modelId ?? (await ensureFallbackWatchModelId(db));
 
   if (body.modelId) {
@@ -33,9 +73,16 @@ export async function createListing(
       hasBox: body.hasBox ?? false,
       hasPapers: body.hasPapers ?? false,
       status: "PENDING",
-      images: body.imageUrl
-        ? { create: [{ url: body.imageUrl, order: 0 }] }
-        : undefined,
+      images:
+        images.length > 0
+          ? {
+              create: images.map((image, index) => ({
+                publicId: image.publicId ?? null,
+                url: image.url,
+                order: index,
+              })),
+            }
+          : undefined,
     },
     include: LISTING_INCLUDE,
   });

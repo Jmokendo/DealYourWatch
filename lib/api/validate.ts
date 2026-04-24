@@ -1,4 +1,8 @@
-import type { Condition, CreateListingBody } from "@/lib/api/contracts";
+import type {
+  Condition,
+  CreateListingBody,
+  CreateListingImageInput,
+} from "@/lib/api/contracts";
 
 const CONDITIONS: Condition[] = [
   "NEW",
@@ -32,6 +36,31 @@ export function parseCreateListingBody(
     condition = o.condition as Condition;
   }
 
+  const images: CreateListingImageInput[] | undefined = Array.isArray(o.images)
+    ? o.images.reduce<CreateListingImageInput[]>((acc, value) => {
+        if (!value || typeof value !== "object") {
+          return acc;
+        }
+
+        const image = value as Record<string, unknown>;
+        const url = typeof image.url === "string" ? image.url.trim() : "";
+        if (!url) {
+          return acc;
+        }
+
+        acc.push({
+          url,
+          publicId:
+            typeof image.publicId === "string"
+              ? image.publicId.trim() || undefined
+              : image.publicId === null
+                ? null
+                : undefined,
+        });
+        return acc;
+      }, [])
+    : undefined;
+
   return {
     ok: true,
     body: {
@@ -39,6 +68,10 @@ export function parseCreateListingBody(
       price,
       userName: typeof o.userName === "string" ? o.userName : undefined,
       imageUrl: typeof o.imageUrl === "string" ? o.imageUrl : undefined,
+      imageUrls: Array.isArray(o.imageUrls)
+        ? o.imageUrls.filter((value): value is string => typeof value === "string")
+        : undefined,
+      images: images?.length ? images : undefined,
       description: typeof o.description === "string" ? o.description : undefined,
       modelId: typeof o.modelId === "string" ? o.modelId : undefined,
       condition,
