@@ -3,7 +3,10 @@ import { Search } from "lucide-react";
 
 export default function HeroSection() {
   return (
-    <section className="bg-[#151515] px-5 pb-24 pt-[4.5rem] sm:px-8 sm:pt-24 lg:pb-28 lg:pt-28">
+    <section
+      className="bg-cover bg-center px-5 pb-24 pt-[4.5rem] sm:px-8 sm:pt-24 lg:pb-28 lg:pt-28"
+      style={{ backgroundImage: "url('/hero.png')" }}
+    >
       <div className="mx-auto max-w-[1280px]">
         <div className="flex min-h-[410px] flex-col justify-center lg:min-h-[530px]">
           <p className="mb-7 text-[11px] font-semibold uppercase tracking-[0.26em] text-[#7b7b7b]">

@@ -13,6 +13,10 @@ const NAV_ITEMS = [
 export default function HomeNavbar() {
   const [open, setOpen] = useState(false);
 
+  // 🔒 TEMPORAL: hasta integrar auth real
+  const isAuthenticated = false;
+  const profileLabel = "Mi Perfil";
+
   return (
     <header className="sticky top-0 z-50 border-b border-black/[0.08] bg-[#f6f5f2]/95 backdrop-blur">
       <div className="mx-auto flex h-16 max-w-[1280px] items-center justify-between px-5 sm:px-8">
@@ -36,18 +40,29 @@ export default function HomeNavbar() {
         </nav>
 
         <div className="hidden items-center gap-2 md:flex">
-          <Link
-            href="/login"
-            className="inline-flex h-9 items-center rounded-full border border-[#1c1c1c]/20 bg-white px-4 text-[13px] font-semibold text-[#1b1b1b] transition hover:border-[#111111] hover:bg-[#f0f0ec]"
-          >
-            Iniciar sesión
-          </Link>
-          <Link
-            href="/sell"
-            className="inline-flex h-9 items-center rounded-full bg-[#111111] px-4 text-[13px] font-semibold text-white transition hover:bg-[#2b2b2b]"
-          >
-            Vender
-          </Link>
+          {isAuthenticated ? (
+            <Link
+              href="/perfil"
+              className="inline-flex h-9 items-center rounded-full border border-[#1c1c1c]/20 bg-white px-4 text-[13px] font-semibold text-[#1b1b1b] transition hover:border-[#111111] hover:bg-[#f0f0ec]"
+            >
+              {profileLabel}
+            </Link>
+          ) : (
+            <>
+              <Link
+                href="/login"
+                className="inline-flex h-9 items-center rounded-full border border-[#1c1c1c]/20 bg-white px-4 text-[13px] font-semibold text-[#1b1b1b] transition hover:border-[#111111] hover:bg-[#f0f0ec]"
+              >
+                Login
+              </Link>
+              <Link
+                href="/vender"
+                className="inline-flex h-9 items-center rounded-full bg-[#111111] px-4 text-[13px] font-semibold text-white transition hover:bg-[#2b2b2b]"
+              >
+                Vender
+              </Link>
+            </>
+          )}
         </div>
 
         <button
@@ -75,20 +90,32 @@ export default function HomeNavbar() {
           </div>
 
           <div className="mt-4 flex flex-col gap-2">
-            <Link
-              href="/login"
-              className="inline-flex h-11 items-center justify-center rounded-full border border-[#1c1c1c]/20 bg-white text-sm font-semibold text-[#111111]"
-              onClick={() => setOpen(false)}
-            >
-              Iniciar sesión
-            </Link>
-            <Link
-              href="/sell"
-              className="inline-flex h-11 items-center justify-center rounded-full bg-[#111111] text-sm font-semibold text-white"
-              onClick={() => setOpen(false)}
-            >
-              Vender
-            </Link>
+            {isAuthenticated ? (
+              <Link
+                href="/perfil"
+                className="inline-flex h-11 items-center justify-center rounded-full border border-[#1c1c1c]/20 bg-white text-sm font-semibold text-[#111111]"
+                onClick={() => setOpen(false)}
+              >
+                {profileLabel}
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="inline-flex h-11 items-center justify-center rounded-full border border-[#1c1c1c]/20 bg-white text-sm font-semibold text-[#111111]"
+                  onClick={() => setOpen(false)}
+                >
+                  Login
+                </Link>
+                <Link
+                  href="/vender"
+                  className="inline-flex h-11 items-center justify-center rounded-full bg-[#111111] text-sm font-semibold text-white"
+                  onClick={() => setOpen(false)}
+                >
+                  Vender
+                </Link>
+              </>
+            )}
           </div>
         </div>
       )}
